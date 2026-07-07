@@ -619,7 +619,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>你的財務資料只存在你自己的 Google，<b>不會經過我們的伺服器</b>。<br>裝置上會存一份快取加快載入，登出即清除。<br>PDF 密碼只存在記憶體，關閉就消失。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼只會暫存在這台裝置，關閉 App 後即自動清除。</div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -647,13 +647,15 @@
     function renderBankSetting() {
       let html = '<div class="bank-setting">';
       // 資料來源說明
-      html += '<div class="info-banner"><b>關於資料來源</b><br>'
-        + '本 App 透過解析你 Gmail 中的銀行通知信自動記帳。<b>只有銀行有寄 Email 通知的交易才會被抓到</b>。<br>'
-        + '現金消費、未開通 Email 通知的交易需<b>手動輸入</b>。建議到各銀行網銀開啟消費/交易 Email 通知，讓記帳更完整。<br>'
-        + '消費同步目前支援<b>信用卡</b>通知（暫不支援簽帳金融卡）；同一銀行多張卡會<b>合併顯示</b>（暫不支援分卡）。<br>'
-        + '台新提款目前只支援<b>無卡提款</b>（一般提款卡插卡提款暫不支援）。</div>';
+      html += '<div class="info-banner"><b>目前已支援同步</b><br>'
+        + '・Gmail 銀行通知信自動記帳（需收到 Email 通知）<br>'
+        + '・信用卡消費通知<br>'
+        + '・同一銀行多張信用卡合併顯示<br>'
+        + '・台新無卡提款通知<br>'
+        + '・現金與未收到 Email 通知的交易請手動新增<br>'
+        + '・其他銀行、卡片類型與更多功能陸續開發中</div>';
       // 密碼說明
-      html += '<div class="info-banner">PDF 密碼<b>只存在這台裝置的記憶體</b>，關閉 App 就清除，不會上傳雲端，我們也看不到。</div>';
+      html += '<div class="info-banner">PDF 密碼只會暫存在這台裝置，關閉 App 後自動清除，不會上傳雲端。</div>';
 
       html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:4px 4px 10px;">勾選要同步的項目</div>';
 
@@ -964,7 +966,11 @@
       accts.forEach(a => balMap[a.bank] = a.balance);
 
       let html = '<div class="bank-setting">';
-      html += '<div class="info-banner">勾選你持有的帳戶。標 <b>⚡</b> 的支援 Email 同步，其餘可手動記帳。<br>下方輸入<b>目前正確的餘額</b>即可（第一次設定或之後想校正都行）。之後按「同步」，抓到的轉帳通知會計入餘額；但<b>並非每家銀行每種交易都會寄 Email</b>，餘額有出入隨時回來這裡改就好。</div>';
+      html += '<div class="info-banner">'
+        + '・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。<br>'
+        + '・輸入<b>目前正確的餘額</b>作為起始金額。<br>'
+        + '・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。'
+        + '</div>';
       // 銀行 chips
       html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
       for (const b of [...TW_BANKS, ...customs]) {
