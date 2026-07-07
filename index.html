@@ -609,7 +609,7 @@
 
     // 聯繫客服
     function openSupport() {
-      const email = 'support@example.com'; // TODO: 換成真正的客服信箱
+      const email = 'vasement@gmail.com';
       const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -2185,7 +2185,17 @@
 
       try {
         const lastSync = await getLastSync();
-        const dateFilter = lastSync ? ('after:' + lastSync) : 'newer_than:90d';
+        let dateFilter, invoiceDateFilter;
+        if (lastSync) {
+          dateFilter = 'after:' + lastSync;
+          invoiceDateFilter = 'after:' + lastSync;
+        } else {
+          // 首次同步：用用戶自選的起始日期（若沒選過則先跳選擇框，見 doSync 呼叫處）
+          const startDate = await getSyncStartDate(); // 格式 YYYY-MM-DD
+          const [y,m,d] = startDate.split('-');
+          dateFilter = 'after:' + y + '/' + parseInt(m) + '/' + parseInt(d);
+          invoiceDateFilter = dateFilter; // 發票也從同一天開始找（雙月信件會自然涵蓋前一期）
+        }
 
         // ---- 消費 ----
         syncBtn.textContent = '同步消費...';
@@ -2283,7 +2293,7 @@
           const existingInvNos = await getExistingInvoiceNos();
           const invRows = [];
           const seenInv = {};
-          const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + dateFilter);
+          const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + invoiceDateFilter);
           const parsedInvoices = [];
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
@@ -2359,6 +2369,66 @@
         const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/_config!A1:B20',{headers:{'Authorization':'Bearer '+accessToken}});
         const d=await res.json(); for(const row of(d.values||[])){if(row[0]==='last_sync')return row[1];}
       } catch(e){} return null;
+    }
+    async function getSavedSyncStartDate() {
+      try {
+        const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/_config!A1:B20',{headers:{'Authorization':'Bearer '+accessToken}});
+        const d=await res.json(); for(const row of(d.values||[])){if(row[0]==='sync_start_date')return row[1];}
+      } catch(e){} return null;
+    }
+    async function saveSyncStartDate(dateStr) {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/_config!A7:B7?valueInputOption=RAW',
+        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['sync_start_date', dateStr]] }) });
+    }
+    // 取得首次同步的起始日期：若已選過直接回傳，否則跳選擇框讓用戶挑
+    async function getSyncStartDate() {
+      const saved = await getSavedSyncStartDate();
+      if (saved) return saved;
+      const chosen = await askSyncStartDate();
+      await saveSyncStartDate(chosen);
+      return chosen;
+    }
+    // 首次同步前跳出的起始日期選擇框
+    function askSyncStartDate() {
+      return new Promise((resolve) => {
+        const today = new Date();
+        const opts = [
+          { label: '最近 1 個月', days: 30 },
+          { label: '最近 3 個月', days: 90 },
+          { label: '最近半年', days: 182 },
+          { label: '今年 1/1 起', special: 'year' },
+        ];
+        const overlay = document.createElement('div');
+        overlay.className = 'qa-overlay';
+        function calcDate(opt) {
+          if (opt.special === 'year') return today.getFullYear() + '-01-01';
+          const d = new Date(today); d.setDate(d.getDate() - opt.days);
+          return d.toISOString().slice(0,10);
+        }
+        let html = '<div class="qa-panel"><div class="qa-title">第一次同步：要抓多久以前的資料？</div>'
+          + '<div style="font-size:12px;color:#9aa;margin-bottom:16px;">之後每次同步只會抓「上次同步之後」的新資料，這個選擇只影響第一次。</div>'
+          + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">'
+          + opts.map((o,i) => '<button class="sync-start-opt" data-idx="' + i + '" style="padding:12px;border-radius:10px;border:1px solid #dde8e5;background:#fff;font-size:14px;cursor:pointer;text-align:left;">' + o.label + '</button>').join('')
+          + '</div>'
+          + '<div class="qa-label">或自訂日期</div>'
+          + '<input type="date" id="customStartDate" class="qa-input" value="' + today.toISOString().slice(0,10) + '" />'
+          + '<button id="customStartBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:600;cursor:pointer;">使用這個日期</button>'
+          + '</div>';
+        overlay.innerHTML = html;
+        document.body.appendChild(overlay);
+        overlay.querySelectorAll('.sync-start-opt').forEach(btn => {
+          btn.onclick = () => {
+            const opt = opts[parseInt(btn.dataset.idx)];
+            overlay.remove();
+            resolve(calcDate(opt));
+          };
+        });
+        document.getElementById('customStartBtn').onclick = () => {
+          const v = document.getElementById('customStartDate').value;
+          overlay.remove();
+          resolve(v || today.toISOString().slice(0,10));
+        };
+      });
     }
     async function setLastSync(s) {
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/_config!A1:B1?valueInputOption=RAW',
