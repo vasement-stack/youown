@@ -291,6 +291,23 @@
 
     // 銀行顏色
     const BANK_COLORS = { '匯豐':'#db0011','永豐':'#00a1a7','新光':'#e97300','華南':'#00843d','台新':'#7b1fa2','中信':'#0a2b5e' };
+    // 自訂銀行顏色（用戶可在資產設定調整，優先於預設色）
+    let bankColors = {};
+    function getBankColor(bank) { return bankColors[bank] || BANK_COLORS[bank] || '#8899aa'; }
+    async function loadBankColors() {
+      if (!spreadsheetId) return;
+      try {
+        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A1:B20',
+          { headers: { 'Authorization': 'Bearer ' + accessToken } });
+        const data = await res.json();
+        const row = (data.values || []).find(r => r[0] === 'bank_colors');
+        bankColors = (row && row[1]) ? JSON.parse(row[1]) : {};
+      } catch(e) { bankColors = {}; }
+    }
+    async function saveBankColors() {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A6:B6?valueInputOption=RAW',
+        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['bank_colors', JSON.stringify(bankColors)]] }) });
+    }
 
     // 分類：待分類為系統保留，其餘為預設 + 用戶自訂
     const SYSTEM_CATEGORY = '待分類';
@@ -487,6 +504,7 @@
           await loadTabSettings();
           await loadPrefs();
           await loadMyBanks();
+          await loadBankColors();
           await loadCategoryRules();
           renderTabs();
           loadBanner();
@@ -519,15 +537,15 @@
           <h2>資料同步</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="openMyBanksSetting()">
-              <div><div class="label">💰 資產設定</div><div class="sub">管理你的帳戶清單與初始餘額</div></div>
+              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與初始餘額</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openBankSetting()">
-              <div><div class="label">📩 同步設定</div><div class="sub">同步 Gmail 的銀行通知與電子發票</div></div>
+              <div><div class="label">同步設定</div><div class="sub">同步 Gmail 的銀行通知與電子發票</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openCategorySetting()">
-              <div><div class="label">🏷️ 分類規則</div><div class="sub">店家關鍵字自動分類</div></div>
+              <div><div class="label">分類規則</div><div class="sub">店家關鍵字自動分類</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -536,7 +554,7 @@
           <h2>安全</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="alert('App 鎖：Face ID / PIN（開發中）')">
-              <div><div class="label">🔐 App 鎖</div><div class="sub">生物辨識 / PIN 解鎖</div></div>
+              <div><div class="label">App 鎖</div><div class="sub">生物辨識 / PIN 解鎖</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -545,15 +563,15 @@
           <h2>通知與偏好</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="alert('通知提醒時間（開發中）')">
-              <div><div class="label">🔔 通知</div><div class="sub">本地提醒時間</div></div>
+              <div><div class="label">通知</div><div class="sub">設定本地提醒時間，或帳單日出爐時提醒</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openTabSetting()">
-              <div><div class="label">📑 顯示頁籤</div><div class="sub">選擇要顯示哪些頁面</div></div>
+              <div><div class="label">顯示頁籤</div><div class="sub">選擇要顯示哪些頁面</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openPrefSetting()">
-              <div><div class="label">🎨 偏好</div><div class="sub">emoji、顯示設定</div></div>
+              <div><div class="label">偏好</div><div class="sub">emoji、顯示設定</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -562,7 +580,7 @@
           <h2>支援</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="openSupport()">
-              <div><div class="label">💬 聯繫客服 / 回報問題</div><div class="sub">遇到 bug 或有建議都歡迎</div></div>
+              <div><div class="label">聯繫客服 / 回報問題</div><div class="sub">遇到 bug 或有建議都歡迎</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -584,7 +602,7 @@
 
     // 聯繫客服
     function openSupport() {
-      const email = 'support@example.com'; // TODO: 換成真正的客服信箱
+      const email = 'vasement@gmail.com'; 
       const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -606,7 +624,8 @@
       html += '<div class="info-banner">ℹ️ <b>關於資料來源</b><br>'
         + '本 App 透過解析你 Gmail 中的銀行通知信自動記帳。<b>只有銀行有寄 Email 通知的交易才會被抓到</b>。<br>'
         + '現金消費、未開通 Email 通知的交易需<b>手動輸入</b>。建議到各銀行網銀開啟消費/交易 Email 通知，讓記帳更完整。<br>'
-        + '消費同步目前支援<b>信用卡</b>通知（暫不支援簽帳金融卡）；同一銀行多張卡會<b>合併顯示</b>（暫不支援分卡）。</div>';
+        + '消費同步目前支援<b>信用卡</b>通知（暫不支援簽帳金融卡）；同一銀行多張卡會<b>合併顯示</b>（暫不支援分卡）。<br>'
+        + '台新提款目前只支援<b>無卡提款</b>（一般提款卡插卡提款暫不支援）。</div>';
       // 密碼說明
       html += '<div class="info-banner">🔐 PDF 密碼<b>只存在這台裝置的記憶體</b>，關閉 App 就清除，不會上傳雲端，我們也看不到。</div>';
 
@@ -622,7 +641,7 @@
         + '</div></div>';
 
       for (const b of BANKS_SUPPORT) {
-        const color = BANK_COLORS[b.name] || '#889';
+        const color = getBankColor(b.name);
         const opt = syncOptions[b.name] || {};
         html += '<div class="bank-block">';
         html += '<div class="bank-block-head"><span class="dot" style="background:' + color + ';width:9px;height:9px;"></span>'
@@ -934,17 +953,23 @@
         + '<button id="addCustomBank" style="background:#00897b;color:#fff;border:none;border-radius:10px;padding:0 16px;font-weight:600;cursor:pointer;white-space:nowrap;">新增</button></div>';
       html += '</div>';
 
-      // 已選帳戶餘額
-      const selected = [...current];
+      // 已選帳戶餘額 + 排序
+      const selected = myBanks || [];
       if (selected.length) {
-        html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 10px;">初始餘額（可留空）</div>';
+        html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 4px;">初始餘額（可留空）</div>';
+        html += '<div style="font-size:11px;color:#bbc;margin:0 4px 10px;">用 ↑↓ 調整順序，會套用到記帳時的帳戶排序</div>';
         html += '<div class="bank-block">';
-        for (const b of selected) {
+        selected.forEach((b, idx) => {
           const bal = pendingBalances[b] !== undefined ? pendingBalances[b] : (balMap[b] !== undefined ? balMap[b] : '');
-          html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5;">'
-            + '<div style="width:90px;font-size:14px;font-weight:600;">' + b + '</div>'
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f5f5f5;">'
+            + '<div style="display:flex;flex-direction:column;gap:2px;">'
+            + '<button class="bank-move-up" data-idx="' + idx + '" ' + (idx===0?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===0?'default':'pointer') + ';opacity:' + (idx===0?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▲</button>'
+            + '<button class="bank-move-down" data-idx="' + idx + '" ' + (idx===selected.length-1?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===selected.length-1?'default':'pointer') + ';opacity:' + (idx===selected.length-1?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▼</button>'
+            + '</div>'
+            + '<input type="color" class="bank-color-input" data-bank="' + b + '" value="' + getBankColor(b) + '" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" />'
+            + '<div style="width:72px;font-size:14px;font-weight:600;flex-shrink:0;">' + b + '</div>'
             + '<input type="number" class="bal-input pw-input" data-bank="' + b + '" placeholder="目前餘額" value="' + bal + '" style="flex:1;margin:0;" /></div>';
-        }
+        });
         html += '</div>';
       }
 
@@ -956,9 +981,10 @@
         chip.onclick = () => {
           collectBalInputs();
           const b = chip.dataset.bank;
-          const cur = new Set(myBanks || []);
-          if (cur.has(b)) cur.delete(b); else cur.add(b);
-          myBanks = [...cur];
+          const arr = myBanks ? [...myBanks] : [];
+          const i = arr.indexOf(b);
+          if (i > -1) arr.splice(i, 1); else arr.push(b);
+          myBanks = arr;
           renderMyBanksSetting();
         };
       });
@@ -966,11 +992,33 @@
         collectBalInputs();
         const name = document.getElementById('customBankInput').value.trim();
         if (!name) return;
-        const cur = new Set(myBanks || []);
-        cur.add(name);
-        myBanks = [...cur];
+        const arr = myBanks ? [...myBanks] : [];
+        if (!arr.includes(name)) arr.push(name);
+        myBanks = arr;
         renderMyBanksSetting();
       };
+      document.querySelectorAll('.bank-move-up').forEach(btn => {
+        btn.onclick = () => {
+          collectBalInputs();
+          const i = parseInt(btn.dataset.idx);
+          if (i <= 0) return;
+          const arr = [...myBanks];
+          [arr[i-1], arr[i]] = [arr[i], arr[i-1]];
+          myBanks = arr;
+          renderMyBanksSetting();
+        };
+      });
+      document.querySelectorAll('.bank-move-down').forEach(btn => {
+        btn.onclick = () => {
+          collectBalInputs();
+          const i = parseInt(btn.dataset.idx);
+          if (i >= myBanks.length-1) return;
+          const arr = [...myBanks];
+          [arr[i], arr[i+1]] = [arr[i+1], arr[i]];
+          myBanks = arr;
+          renderMyBanksSetting();
+        };
+      });
       document.getElementById('myBanksDoneBtn').onclick = async () => {
         if (!myBanks || !myBanks.length) { showToast('至少勾選一個（例如 現金）'); return; }
         // 收集餘額輸入
@@ -978,7 +1026,12 @@
         document.querySelectorAll('.bal-input').forEach(inp => {
           if (inp.value !== '') balances[inp.dataset.bank] = parseFloat(inp.value);
         });
+        // 收集顏色輸入
+        document.querySelectorAll('.bank-color-input').forEach(inp => {
+          bankColors[inp.dataset.bank] = inp.value;
+        });
         await saveMyBanks();
+        await saveBankColors();
         await upsertAccountBalances(balances, myBanks);
         writeCache('accounts', await loadAccounts());
         document.getElementById('myBanksView').style.display = 'none';
@@ -1248,7 +1301,7 @@
           + '<div class="month-head-left"><span class="caret">▼</span><div class="month-title" style="margin-left:6px;">' + (m===curMonth?'🟢 ':'') + label + '</div></div>'
           + '<div class="month-total">-$' + fmt(total) + '</div></div>';
         for (const e of items) {
-          const color = BANK_COLORS[e.bank] || '#889';
+          const color = getBankColor(e.bank);
           // 配對到發票 → invoice_detail 格式「店名/發票號碼：品項」
           let storeName = '', invNo = '';
           if (e.invoice_detail) {
@@ -1384,7 +1437,7 @@
           const daysStr = days === null ? '' : (days < 0 ? '逾期 ' + Math.abs(days) + ' 天' : '剩 ' + days + ' 天');
           html += '<div class="bill-card" style="border-left:4px solid ' + urgentColor + ';">'
             + '<div class="bill-card-top"><div>'
-            + '<div class="bill-bank"><span class="dot" style="background:' + (BANK_COLORS[b.bank]||'#889') + ';width:9px;height:9px;"></span>' + b.bank + '</div>'
+            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(b.bank) + ';width:9px;height:9px;"></span>' + b.bank + '</div>'
             + '<div class="bill-due" style="color:' + urgentColor + ';">截止 ' + dueStr + (daysStr?' · '+daysStr:'') + '</div>'
             + '</div><div><div class="bill-amount">$' + fmt(b.total_amount) + '</div><div class="bill-tag">PDF 帳單</div></div></div>'
             + '<button class="btn-paid" data-key="' + b.key + '">✓ 標記已繳</button>'
@@ -1506,12 +1559,19 @@
         setContent('<div class="empty">還沒有帳戶資料<br>到設定勾選「帳戶」並同步</div>');
         return;
       }
+      // 依資產設定的順序排列；未在清單中的（例如舊資料）排在後面
+      const order = myBanks || [];
+      const sorted = [...accountsData].sort((a, b) => {
+        let ia = order.indexOf(a.bank); if (ia === -1) ia = 999;
+        let ib = order.indexOf(b.bank); if (ib === -1) ib = 999;
+        return ia - ib;
+      });
       const total = accountsData.reduce((s,a) => s + a.balance, 0);
       let html = '<div class="total-card"><div class="tc-label">🔥 總資產</div><div class="tc-amount">$' + fmt(total) + '</div></div>';
 
-      for (const a of accountsData) {
+      for (const a of sorted) {
         const neg = a.balance < 0;
-        const color = BANK_COLORS[a.bank] || '#889';
+        const color = getBankColor(a.bank);
         html += '<div class="acct-card" data-bank="' + a.bank + '">'
           + '<div class="acct-head" data-bank="' + a.bank + '">'
           + '<div class="acct-name"><span class="dot" style="background:' + color + ';width:9px;height:9px;"></span>' + a.bank
@@ -2007,7 +2067,47 @@
     // ===== 帳戶(存款/轉帳) parser =====
     function parseSinopacTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/金額[：:]\s*NT?\$?\s*([\d,]+)/)||body.match(/([\d,]+)\s*元/); const fm=body.match(/轉出帳號[：:]\s*(\S+)/); const tm=body.match(/轉入帳號[：:]\s*(\S+)/); const type=body.includes('轉出')?'轉出':'轉入'; if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'永豐',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     function parseCtbcTransfer(body){ const d=body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/交易金額\s*新臺幣\s*([\d,]+)/); const type=body.includes('提領')?'提領':(body.includes('轉出')?'轉出':'轉入'); const acc=body.match(/交易帳號\s*(\S+)/); if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'中信',type,from_account:acc?acc[1]:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
-    function parseTaishinTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/)||body.match(/(\d{4})年(\d{2})月(\d{2})日/); const a=body.match(/提款金額[：:]\s*\$?\s*([\d,]+)/)||body.match(/金額[：:]\s*\$?\s*NT?\$?\s*([\d,]+)/)||body.match(/新台幣\s*([\d,]+)/); const type=body.includes('提款')?'提款':(body.includes('轉出')?'轉出':'轉入'); if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'台新',type,from_account:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
+    // 台新無卡提款：需「設定通知」(有金額)配對「結果通知」(有成功與否)，兩者都有才記錄
+    function parseTaishinSetup(body) {
+      const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
+      const amt = (body.match(/提款金額[：:]\s*\$?\s*([\d,]+)/)||[])[1];
+      const t = (body.match(/有效時間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
+      if (!acct || !amt || !t) return null;
+      return { account: acct, amount: parseInt(amt.replace(/,/g,''),10), time: t };
+    }
+    function parseTaishinResult(body) {
+      const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
+      const t = (body.match(/時\s*間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
+      const success = body.includes('提款結果：提款成功') || body.includes('提款結果:提款成功');
+      if (!acct || !t) return null;
+      return { account: acct, time: t, success };
+    }
+    async function syncTaishinAtmWithdrawals(dateFilter, existingTrIds) {
+      const rows = [];
+      const [setupMsgs, resultMsgs] = await Promise.all([
+        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
+        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
+      ]);
+      const setups = [];
+      for (const msg of setupMsgs) {
+        const md = await fetchMsg(msg.id); if(!md) continue;
+        const p = parseTaishinSetup(extractBody(md.payload));
+        if (p) setups.push(p);
+      }
+      for (const msg of resultMsgs) {
+        if (existingTrIds.has('taishin_atm_'+msg.id)) continue;
+        const md = await fetchMsg(msg.id); if(!md) continue;
+        const r = parseTaishinResult(extractBody(md.payload));
+        if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
+        // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
+        const match = setups.filter(s => s.account === r.account)
+          .sort((a,b) => Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(a.time.replace(/\//g,'-'))) - Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(b.time.replace(/\//g,'-'))))[0];
+        if (!match) continue; // 找不到對應金額，無法記錄
+        const dateStr = r.time.slice(0,10).replace(/\//g,'-');
+        rows.push([dateStr,'台新','提款','','',match.amount,'taishin_atm_'+msg.id]);
+      }
+      return rows;
+    }
     function parseObankTransfer(body){ const dm=body.match(/(\d{2})日/); const a=body.match(/TWD\s*([\d,]+)元/)||body.match(/([\d,]+)元/); const type=body.includes('轉入')?'轉入':'轉出'; if(!dm||!a)return null; const now=new Date(); const day=parseInt(dm[1]); let month=day<=now.getDate()?now.getMonth()+1:(now.getMonth()>0?now.getMonth():12); let year=now.getFullYear(); if(month>now.getMonth()+1)year--; return {date:year+'-'+String(month).padStart(2,'0')+'-'+dm[1],bank:'王道',type,from_account:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     function parseHsbcTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/新臺幣([\d,]+)/); const fm=body.match(/轉出帳戶[：:]\s*(\S+)/); const tm=body.match(/轉入帳戶[：:]\s*(\S+)/); const type=fm?'轉出':'轉入'; if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'匯豐',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     function parseShanghaiTransfer(body){ const d=body.match(/交易時間[：:]\s*(\d{3})\/(\d{2})\/(\d{2})/); const a=body.match(/轉帳金額[：:]\s*NT\s*([\d,]+)/); const fm=body.match(/轉出帳號[：:]\s*(\S+)/); const tm=body.match(/轉入帳號[：:]\s*(\S+)/); const type=body.includes('轉出')?'轉出':'轉入'; if(!d||!a)return null; const year=parseInt(d[1])+1911; return {date:year+'-'+d[2]+'-'+d[3],bank:'上海',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
@@ -2043,7 +2143,6 @@
     const ACCOUNT_SOURCES = [
       { bank:'永豐', query:'from:mma@sinopac.com', parse:parseSinopacTransfer },
       { bank:'中信', query:'from:bank.csc@inib.ctbcbank.com', parse:parseCtbcTransfer },
-      { bank:'台新', query:'from:webmaster@taishinbank.com.tw subject:設定通知', parse:parseTaishinTransfer },
       { bank:'王道', query:'from:notification@service.o-bank.com', parse:parseObankTransfer },
       { bank:'匯豐', query:'from:enotification@mail.hsbc.com.tw', parse:parseHsbcTransfer },
       { bank:'上海', query:'from:service1@scsb.com.tw', parse:parseShanghaiTransfer },
@@ -2127,6 +2226,11 @@
               if (p) trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]);
             }));
           }
+        }
+        // 台新無卡提款（設定通知+結果通知配對，只有配對成功才記錄）
+        if (isEnabled('台新', 'account')) {
+          const taishinRows = await syncTaishinAtmWithdrawals(dateFilter, existingTrIds);
+          trRows.push(...taishinRows);
         }
         if (trRows.length) {
           await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:trRows})});
