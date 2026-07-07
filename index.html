@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Youown — 你的資料都在自己手上</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#00897b" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Youown" />
+  <link rel="icon" href="icon-192.png" />
   <script src="https://accounts.google.com/gsi/client"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
@@ -602,7 +609,7 @@
 
     // 聯繫客服
     function openSupport() {
-      const email = 'vasement@gmail.com'; 
+      const email = 'vasement@gmail.com'; // TODO: 換成真正的客服信箱
       const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
