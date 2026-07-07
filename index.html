@@ -160,9 +160,6 @@
     .ad-banner { position: fixed; bottom: 62px; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 72px; z-index: 49; display: none; background: #fff; border-top: 1px solid #e5ecea; }
     .ad-banner img { width: 100%; height: 100%; display: block; object-fit: cover; cursor: pointer; }
     .app.has-banner { padding-bottom: 144px; }
-    /* 設定頁完成按鈕：sticky 貼在 banner 上方，避免被蓋住點不到 */
-    .settings-cta-sticky { position: sticky; bottom: 20px; z-index: 55; }
-    .app.has-banner .settings-cta-sticky { bottom: 140px; }
     /* status */
     .status { text-align: center; padding: 8px; font-size: 13px; color: #7a8a87; }
     .status.ok { color: #2e7d32; } .status.err { color: #c62828; }
@@ -545,9 +542,11 @@
     document.getElementById('settingsBtn').onclick = () => openSettings();
     document.getElementById('backBtn').onclick = () => closeSettings();
 
+    let bannerActive = false;
     function openSettings() {
       document.getElementById('mainView').style.display = 'none';
       document.getElementById('tabbar').style.display = 'none';
+      document.getElementById('adBanner').style.display = 'none';
       document.getElementById('settingsView').style.display = 'block';
       renderSettings();
     }
@@ -555,6 +554,7 @@
       document.getElementById('settingsView').style.display = 'none';
       document.getElementById('mainView').style.display = 'block';
       document.getElementById('tabbar').style.display = 'flex';
+      if (bannerActive) document.getElementById('adBanner').style.display = 'block';
     }
 
     function renderSettings() {
@@ -690,7 +690,7 @@
         html += '</div>';
       }
 
-      html += '<button id="bankDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
+      html += '<button id="bankDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('bankSettingContent').innerHTML = html;
 
@@ -837,7 +837,7 @@
           + '<button class="tab-toggle" data-key="' + t.key + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:5px 14px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ 顯示':'隱藏中') + '</button></div>';
       }
       html += '</div>';
-      html += '<button id="tabDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
+      html += '<button id="tabDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('tabSettingContent').innerHTML = html;
 
@@ -904,7 +904,7 @@
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblMid">普通（' + prefs.thresholdLow + '-' + prefs.thresholdHigh + '%）</div><input type="text" id="prefEmojiMid" value="' + prefs.emojiMid + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblLow">很省（<' + prefs.thresholdLow + '%）</div><input type="text" id="prefEmojiLow" value="' + prefs.emojiLow + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '</div></div>';
-      html += '<button id="prefDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
+      html += '<button id="prefDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('prefSettingContent').innerHTML = html;
 
@@ -999,7 +999,7 @@
         html += '</div>';
       }
 
-      html += '<button id="myBanksDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
+      html += '<button id="myBanksDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('myBanksContent').innerHTML = html;
 
@@ -2628,6 +2628,7 @@
           else window.open(b.link, '_blank');
         };
         banner.style.display = 'block';
+        bannerActive = true;
         document.querySelector('.app').classList.add('has-banner');
       } catch(e) {} // 抓不到就不顯示
     }
