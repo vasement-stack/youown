@@ -609,7 +609,7 @@
 
     // 聯繫客服
     function openSupport() {
-      const email = 'vasement@gmail.com'; // TODO: 換成真正的客服信箱
+      const email = 'support@example.com'; // TODO: 換成真正的客服信箱
       const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -945,7 +945,7 @@
       accts.forEach(a => balMap[a.bank] = a.balance);
 
       let html = '<div class="bank-setting">';
-      html += '<div class="info-banner">💰 勾選你持有的帳戶。標 <b>⚡</b> 的支援 Email 同步，其餘可手動記帳。<br><b>初始餘額請手動輸入一次</b>。之後按「同步」時，抓到的轉帳通知會計入餘額；但<b>並非每家銀行每種交易都會寄 Email</b>，餘額有出入可隨時到帳戶頁「校正」。</div>';
+      html += '<div class="info-banner">💰 勾選你持有的帳戶。標 <b>⚡</b> 的支援 Email 同步，其餘可手動記帳。<br>下方輸入<b>目前正確的餘額</b>即可（第一次設定或之後想校正都行）。之後按「同步」，抓到的轉帳通知會計入餘額；但<b>並非每家銀行每種交易都會寄 Email</b>，餘額有出入隨時回來這裡改就好。</div>';
       // 銀行 chips
       html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
       for (const b of [...TW_BANKS, ...customs]) {
@@ -963,7 +963,7 @@
       // 已選帳戶餘額 + 排序
       const selected = myBanks || [];
       if (selected.length) {
-        html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 4px;">初始餘額（可留空）</div>';
+        html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 4px;">餘額（可留空，之後隨時可校正）</div>';
         html += '<div style="font-size:11px;color:#bbc;margin:0 4px 10px;">用 ↑↓ 調整順序，會套用到記帳時的帳戶排序</div>';
         html += '<div class="bank-block">';
         selected.forEach((b, idx) => {
