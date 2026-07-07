@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>I'm Rich — 帳本</title>
+  <title>Youown — 你的資料都在自己手上</title>
   <script src="https://accounts.google.com/gsi/client"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
@@ -190,7 +190,7 @@
   <div class="app" id="app">
     <!-- 登入畫面 -->
     <div class="login" id="loginView">
-      <h1>I'm Rich</h1>
+      <h1>Youown</h1>
       <p>你的財務，只存在你自己的 Google</p>
       <button class="btn-login" id="loginBtn">用 Google 登入</button>
     </div>
@@ -396,7 +396,7 @@
     }
 
     // 偏好（總覽顏色 / emoji）
-    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50 };
+    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋' };
     let prefs = { ...DEFAULT_PREFS };
     async function loadPrefs() {
       if (!spreadsheetId) return;
@@ -407,10 +407,21 @@
         const row = (data.values || []).find(r => r[0] === 'prefs');
         prefs = (row && row[1]) ? { ...DEFAULT_PREFS, ...JSON.parse(row[1]) } : { ...DEFAULT_PREFS };
       } catch(e) { prefs = { ...DEFAULT_PREFS }; }
+      writeCache('prefs', prefs);
+    }
+    // 登入後立即顯示歡迎語（優先用快取偏好，Sheet 載入前就能顯示）
+    function showWelcome() {
+      const cached = readCache('prefs');
+      const msg = (cached && cached.welcomeMsg) ? cached.welcomeMsg : prefs.welcomeMsg;
+      setContent('<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;text-align:center;">'
+        + '<div style="font-size:26px;font-weight:700;line-height:1.5;padding:0 24px;word-break:break-word;">' + String(msg).replace(/</g,'&lt;') + '</div>'
+        + '<div style="margin-top:14px;font-size:13px;color:#9ab;opacity:.7;">資料載入中…</div>'
+        + '</div>');
     }
     async function savePrefs() {
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A4:B4?valueInputOption=RAW',
         { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['prefs', JSON.stringify(prefs)]] }) });
+      writeCache('prefs', prefs);
     }
 
     // 密碼記憶體（同 session，關頁面即清除，不落地不上雲）
@@ -470,6 +481,7 @@
           document.getElementById('loginView').style.display = 'none';
           document.getElementById('mainView').style.display = 'block';
           document.getElementById('tabbar').style.display = 'flex';
+          showWelcome(); // 立即顯示歡迎語（用快取偏好），蓋掉載入空白
           await ensureSheet();
           await loadSyncOptions();
           await loadTabSettings();
@@ -565,7 +577,7 @@
         <div class="setting-section">
           <div class="info-banner" style="margin:0;">🔒 <b>隱私說明</b><br>本 App 在你的裝置本機快取財務資料以加快載入。所有資料只存在你自己的 Google（Sheet／Gmail）與這台裝置，<b>不會經過我們的伺服器</b>。PDF 密碼僅存記憶體，關閉即清除。登出會清除本機快取。</div>
         </div>
-        <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">I'm Rich · 你的資料只存在你的 Google</p>
+        <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">Youown · 你的資料都在自己手上</p>
       `;
       document.getElementById('settingsContent').innerHTML = html;
     }
@@ -573,7 +585,7 @@
     // 聯繫客服
     function openSupport() {
       const email = 'support@example.com'; // TODO: 換成真正的客服信箱
-      const subject = encodeURIComponent('[I\'m Rich] 問題回報 / 建議');
+      const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
     }
@@ -822,6 +834,10 @@
     function renderPrefSetting() {
       let html = '<div class="bank-setting">';
       // 總覽長條顏色
+      // 歡迎語
+      html += '<div class="bank-block"><div style="font-weight:600;margin-bottom:4px;">登入歡迎語</div>'
+        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;">登入後、資料載入前顯示的一句話</div>'
+        + '<input type="text" id="prefWelcome" class="pw-input" maxlength="40" value="' + String(prefs.welcomeMsg||'').replace(/"/g,'&quot;') + '" placeholder="歡迎回來 👋" style="margin:0;" /></div>';
       html += '<div class="bank-block"><div style="font-weight:600;margin-bottom:10px;">總覽長條圖顏色</div>'
         + '<div style="display:flex;gap:16px;margin-bottom:12px;">'
         + '<div style="flex:1;"><div class="pw-label">收入</div><input type="color" id="prefIncColor" value="' + prefs.incColor + '" style="width:100%;height:40px;border:1px solid #dde8e5;border-radius:8px;cursor:pointer;" /></div>'
@@ -861,6 +877,7 @@
         if (isNaN(th) || isNaN(tl) || tl >= th) { showToast('門檻需為數字，且「很省」要小於「花太多」'); return; }
         prefs.thresholdHigh = th;
         prefs.thresholdLow = tl;
+        prefs.welcomeMsg = document.getElementById('prefWelcome').value.trim() || '歡迎回來 👋';
         prefs.incColor = document.getElementById('prefIncColor').value;
         prefs.expColor = document.getElementById('prefExpColor').value;
         prefs.emojiHigh = document.getElementById('prefEmojiHigh').value || '😱';
@@ -2340,7 +2357,7 @@
       overlay.className = 'qa-overlay';
       overlay.innerHTML = '<div class="qa-panel" style="text-align:center;">'
         + '<div style="font-size:40px;margin-bottom:8px;">👋</div>'
-        + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 I\'m Rich</div>'
+        + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 Youown</div>'
         + '<div style="font-size:13px;color:#7a8a87;margin-bottom:20px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
         + '<div style="text-align:left;background:#f7faf9;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;line-height:2;">'
         + '<div><b>三步驟開始：</b></div>'
