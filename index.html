@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Youown — 你的資料都在自己手上</title>
+  <title>YouOwn — 你的資料都在自己手上</title>
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00897b" />
   <link rel="apple-touch-icon" href="icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Youown" />
+  <meta name="apple-mobile-web-app-title" content="YouOwn" />
   <link rel="icon" href="icon-192.png" />
   <script src="https://accounts.google.com/gsi/client"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -200,7 +200,7 @@
   <div class="app" id="app">
     <!-- 登入畫面 -->
     <div class="login" id="loginView">
-      <h1>Youown</h1>
+      <h1>YouOwn</h1>
       <p>你的財務，只存在你自己的 Google</p>
       <button class="btn-login" id="loginBtn">用 Google 登入</button>
     </div>
@@ -288,7 +288,7 @@
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/userinfo.email'
     ].join(' ');
-    const SHEET_TITLE = 'Bill Manager 帳本';
+    const SHEET_TITLE = 'YouOwn 帳本';
 
     // 頁籤定義（之後可由 _config 控制顯示哪些）
     const TABS = [
@@ -619,9 +619,9 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;">🔒 <b>隱私說明</b><br>你的財務資料只存在你自己的 Google，<b>不會經過我們的伺服器</b>。<br>裝置上會存一份快取加快載入，登出即清除。<br>PDF 密碼只存在記憶體，關閉就消失。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>你的財務資料只存在你自己的 Google，<b>不會經過我們的伺服器</b>。<br>裝置上會存一份快取加快載入，登出即清除。<br>PDF 密碼只存在記憶體，關閉就消失。</div>
         </div>
-        <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">Youown · 你的資料都在自己手上</p>
+        <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
       document.getElementById('settingsContent').innerHTML = html;
     }
@@ -629,7 +629,7 @@
     // 聯繫客服
     function openSupport() {
       const email = 'vasement@gmail.com';
-      const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
+      const subject = encodeURIComponent('[YouOwn] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
     }
@@ -647,13 +647,13 @@
     function renderBankSetting() {
       let html = '<div class="bank-setting">';
       // 資料來源說明
-      html += '<div class="info-banner">ℹ️ <b>關於資料來源</b><br>'
+      html += '<div class="info-banner"><b>關於資料來源</b><br>'
         + '本 App 透過解析你 Gmail 中的銀行通知信自動記帳。<b>只有銀行有寄 Email 通知的交易才會被抓到</b>。<br>'
         + '現金消費、未開通 Email 通知的交易需<b>手動輸入</b>。建議到各銀行網銀開啟消費/交易 Email 通知，讓記帳更完整。<br>'
         + '消費同步目前支援<b>信用卡</b>通知（暫不支援簽帳金融卡）；同一銀行多張卡會<b>合併顯示</b>（暫不支援分卡）。<br>'
         + '台新提款目前只支援<b>無卡提款</b>（一般提款卡插卡提款暫不支援）。</div>';
       // 密碼說明
-      html += '<div class="info-banner">🔐 PDF 密碼<b>只存在這台裝置的記憶體</b>，關閉 App 就清除，不會上傳雲端，我們也看不到。</div>';
+      html += '<div class="info-banner">PDF 密碼<b>只存在這台裝置的記憶體</b>，關閉 App 就清除，不會上傳雲端，我們也看不到。</div>';
 
       html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:4px 4px 10px;">勾選要同步的項目</div>';
 
@@ -737,7 +737,7 @@
     }
     function renderCategorySetting() {
       let html = '<div class="bank-setting">';
-      html += '<div class="info-banner">🏷️ 設定「店家關鍵字 → 分類」規則。發票店名<b>包含</b>關鍵字就自動歸類。<br>例如「全家」→ 超商，之後所有全家發票自動分類。</div>';
+      html += '<div class="info-banner">設定「店家關鍵字 → 分類」規則。發票店名<b>包含</b>關鍵字就自動歸類。<br>例如「全家」→ 超商，之後所有全家發票自動分類。</div>';
       html += '<div class="bank-block"><div class="pw-label">新增規則</div>'
         + '<div style="display:flex;gap:8px;margin-bottom:8px;"><input id="newKeyword" class="pw-input" placeholder="店家關鍵字（如 全家）" style="flex:1;" />'
         + '<input id="newCategory" class="pw-input" placeholder="分類（如 超商）" style="flex:1;" /></div>'
@@ -828,7 +828,7 @@
     function renderTabSetting() {
       const current = enabledTabs || new Set(TABS.map(t=>t.key));
       let html = '<div class="bank-setting">';
-      html += '<div class="info-banner">📑 選擇底部要顯示的頁籤。至少保留一個。</div>';
+      html += '<div class="info-banner">選擇底部要顯示的頁籤。至少保留一個。</div>';
       html += '<div class="bank-block">';
       for (const t of TABS) {
         const on = current.has(t.key);
@@ -964,7 +964,7 @@
       accts.forEach(a => balMap[a.bank] = a.balance);
 
       let html = '<div class="bank-setting">';
-      html += '<div class="info-banner">💰 勾選你持有的帳戶。標 <b>⚡</b> 的支援 Email 同步，其餘可手動記帳。<br>下方輸入<b>目前正確的餘額</b>即可（第一次設定或之後想校正都行）。之後按「同步」，抓到的轉帳通知會計入餘額；但<b>並非每家銀行每種交易都會寄 Email</b>，餘額有出入隨時回來這裡改就好。</div>';
+      html += '<div class="info-banner">勾選你持有的帳戶。標 <b>⚡</b> 的支援 Email 同步，其餘可手動記帳。<br>下方輸入<b>目前正確的餘額</b>即可（第一次設定或之後想校正都行）。之後按「同步」，抓到的轉帳通知會計入餘額；但<b>並非每家銀行每種交易都會寄 Email</b>，餘額有出入隨時回來這裡改就好。</div>';
       // 銀行 chips
       html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
       for (const b of [...TW_BANKS, ...customs]) {
@@ -2591,13 +2591,13 @@
       overlay.className = 'qa-overlay';
       overlay.innerHTML = '<div class="qa-panel" style="text-align:center;">'
         + '<div style="font-size:40px;margin-bottom:8px;">👋</div>'
-        + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 Youown</div>'
+        + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
         + '<div style="font-size:13px;color:#7a8a87;margin-bottom:20px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
         + '<div style="text-align:left;background:#f7faf9;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;line-height:2;">'
         + '<div><b>三步驟開始：</b></div>'
-        + '<div>💰 <b>資產設定</b>：勾選你的銀行、輸入目前餘額</div>'
-        + '<div>📩 <b>同步設定</b>：勾選要同步的項目、填 PDF 密碼</div>'
-        + '<div>🔄 回主畫面按<b>「同步」</b>，開始自動記帳</div>'
+        + '<div><b>資產設定</b>：勾選你的銀行、輸入目前餘額</div>'
+        + '<div><b>同步設定</b>：勾選要同步的項目、填 PDF 密碼</div>'
+        + '<div>回主畫面按<b>「同步」</b>，開始自動記帳</div>'
         + '</div>'
         + '<div class="qa-btns"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
         + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">開始設定</button></div>'
