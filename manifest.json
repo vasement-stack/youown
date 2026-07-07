@@ -1,6 +1,6 @@
 {
-  "name": "Youown",
-  "short_name": "Youown",
+  "name": "YouOwn",
+  "short_name": "YouOwn",
   "description": "你的資料都在自己手上",
   "start_url": "./index.html",
   "display": "standalone",
