@@ -341,7 +341,7 @@
       return [SYSTEM_CATEGORY, ...[...set]];
     }
     async function ensureCategoriesSheet() {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       let sheet=meta.sheets.find(s=>s.properties.title==='categories');
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
@@ -458,6 +458,18 @@
 
     // ===== localStorage 快取 =====
     // 快取財務資料，加快載入。資料仍只存在你的 Google，不經過我們。
+    // 取得試算表 metadata，統一處理權杖過期/API 錯誤，避免各處重複 fetch 又各自崩潰
+    async function fetchSheetMeta() {
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId, {headers:{'Authorization':'Bearer '+accessToken}});
+      const meta = await res.json();
+      if (!meta || !Array.isArray(meta.sheets)) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('登入已過期，請重新整理頁面再登入一次');
+        }
+        throw new Error('讀取試算表失敗（' + (meta && meta.error && meta.error.message ? meta.error.message : ('狀態碼 ' + res.status)) + '）');
+      }
+      return meta;
+    }
     function cacheKey(name) { return 'imrich_cache_' + name; }
     function doLogout() {
       clearCache();
@@ -771,7 +783,7 @@
         {method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[keyword,category]]})});
     }
     async function deleteCategoryRule(idx) {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       const sheet=meta.sheets.find(s=>s.properties.title==='categories');
       if(!sheet)return;
       const sheetId=sheet.properties.sheetId;
@@ -1415,7 +1427,7 @@
         const del = document.getElementById('editDelete');
         if (del) del.onclick = async () => {
           if (!confirm('確定刪除這筆手動記帳？')) return;
-          const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+          const meta=await fetchSheetMeta();
           const sheet=meta.sheets.find(s=>s.properties.title==='expenses');
           if(sheet){
             await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:sheet.properties.sheetId,dimension:'ROWS',startIndex:rowNum-1,endIndex:rowNum}}}]})});
@@ -2445,7 +2457,7 @@
       const d=await res.json(); const s=new Set(); (d.values||[]).forEach(r=>{if(r[6])s.add(r[6]);}); return s;
     }
     async function ensureTransfersSheet() {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       let sheet=meta.sheets.find(s=>s.properties.title==='transfers');
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
@@ -2466,7 +2478,7 @@
       const d=await res.json(); const s=new Set(); (d.values||[]).forEach(r=>{if(r[0])s.add(r[0]);}); return s;
     }
     async function ensureAccountsSheet() {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       let sheet=meta.sheets.find(s=>s.properties.title==='accounts');
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
@@ -2502,7 +2514,7 @@
       return null;
     }
     async function ensureInvoicesSheet() {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       let sheet=meta.sheets.find(s=>s.properties.title==='invoices');
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
@@ -2520,7 +2532,7 @@
       const d=await res.json(); const s=new Set(); (d.values||[]).forEach(r=>{if(r[0])s.add(r[0]);}); return s;
     }
     async function ensureBillsSheet() {
-      const meta=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const meta=await fetchSheetMeta();
       let billsSheet=meta.sheets.find(s=>s.properties.title==='bills');
       let billsSheetId;
       if(billsSheet){billsSheetId=billsSheet.properties.sheetId;}
