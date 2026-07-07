@@ -521,17 +521,21 @@
           document.getElementById('mainView').style.display = 'block';
           document.getElementById('tabbar').style.display = 'flex';
           showWelcome(); // 立即顯示歡迎語（用快取偏好），蓋掉載入空白
-          await ensureSheet();
-          await loadSyncOptions();
-          await loadTabSettings();
-          await loadPrefs();
-          await loadMyBanks();
-          await loadBankColors();
-          await loadCategoryRules();
-          renderTabs();
-          loadBanner();
-          await loadAndRender();
-          if (myBanks === null) showOnboarding(); // 新用戶引導
+          try {
+            await ensureSheet();
+            await loadSyncOptions();
+            await loadTabSettings();
+            await loadPrefs();
+            await loadMyBanks();
+            await loadBankColors();
+            await loadCategoryRules();
+            renderTabs();
+            loadBanner();
+            await loadAndRender();
+            if (myBanks === null) showOnboarding(); // 新用戶引導
+          } catch (err) {
+            setContent('<div class="empty">初始化失敗：' + (err && err.message ? err.message : '請重新整理再登入一次') + '</div>');
+          }
         },
       });
     };
@@ -1043,22 +1047,31 @@
       });
       document.getElementById('myBanksDoneBtn').onclick = async () => {
         if (!myBanks || !myBanks.length) { showToast('至少勾選一個（例如 現金）'); return; }
-        // 收集餘額輸入
-        const balances = {};
-        document.querySelectorAll('.bal-input').forEach(inp => {
-          if (inp.value !== '') balances[inp.dataset.bank] = parseFloat(inp.value);
-        });
-        // 收集顏色輸入
-        document.querySelectorAll('.bank-color-input').forEach(inp => {
-          bankColors[inp.dataset.bank] = inp.value;
-        });
-        await saveMyBanks();
-        await saveBankColors();
-        await upsertAccountBalances(balances, myBanks);
-        writeCache('accounts', await loadAccounts());
-        document.getElementById('myBanksView').style.display = 'none';
-        document.getElementById('settingsView').style.display = 'block';
-        showToast('資產設定已儲存');
+        const btn = document.getElementById('myBanksDoneBtn');
+        if (btn.disabled) return; // 避免重複點擊
+        const origText = btn.textContent;
+        btn.disabled = true; btn.style.opacity = '0.6'; btn.textContent = '儲存中...';
+        try {
+          // 收集餘額輸入
+          const balances = {};
+          document.querySelectorAll('.bal-input').forEach(inp => {
+            if (inp.value !== '') balances[inp.dataset.bank] = parseFloat(inp.value);
+          });
+          // 收集顏色輸入
+          document.querySelectorAll('.bank-color-input').forEach(inp => {
+            bankColors[inp.dataset.bank] = inp.value;
+          });
+          await saveMyBanks();
+          await saveBankColors();
+          await upsertAccountBalances(balances, myBanks);
+          writeCache('accounts', await loadAccounts());
+          document.getElementById('myBanksView').style.display = 'none';
+          document.getElementById('settingsView').style.display = 'block';
+          showToast('資產設定已儲存');
+        } catch (err) {
+          showToast('儲存失敗：' + (err && err.message ? err.message : '請檢查網路後再試一次'));
+          btn.disabled = false; btn.style.opacity = '1'; btn.textContent = origText;
+        }
       };
     }
 
@@ -1134,7 +1147,32 @@
       const q = encodeURIComponent("name='" + SHEET_TITLE + "' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false");
       const sd = await (await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=files(id,name)',
         { headers: { 'Authorization': 'Bearer ' + accessToken } })).json();
-      if (sd.files && sd.files.length) spreadsheetId = sd.files[0].id;
+      if (sd.files && sd.files.length) { spreadsheetId = sd.files[0].id; return; }
+      // 新用戶：建立完整試算表（所有分頁 + 標題列）
+      const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          properties: { title: SHEET_TITLE },
+          sheets: ['expenses','bills','transfers','invoices','accounts','categories','_config'].map(t => ({ properties: { title: t } }))
+        })
+      });
+      const created = await createRes.json();
+      if (!created || !created.spreadsheetId) {
+        throw new Error('建立帳本失敗（' + (created && created.error && created.error.message ? created.error.message : '請重新登入再試') + '）');
+      }
+      spreadsheetId = created.spreadsheetId;
+      // 寫入各分頁標題列
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values:batchUpdate', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valueInputOption: 'RAW', data: [
+          { range: 'expenses!A1:J1', values: [['日期','銀行','金額','備註','gmail_message_id','分類','狀態','發票明細','來源','排除']] },
+          { range: 'bills!A1:G1', values: [['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key']] },
+          { range: 'transfers!A1:H1', values: [['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note']] },
+          { range: 'invoices!A1:J1', values: [['日期','店名','金額','發票號碼','載具','統編','分類','狀態','配對消費','明細']] },
+          { range: 'accounts!A1:B1', values: [['銀行','餘額']] },
+          { range: 'categories!A1:B1', values: [['關鍵字','分類']] }
+        ]})
+      });
     }
 
     async function loadExpenses() {
