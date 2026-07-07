@@ -156,10 +156,12 @@
     .tab { background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 12px; color: #aab; font-size: 11px; }
     .tab.active { color: #00897b; font-weight: 700; }
     .tab svg { width: 22px; height: 22px; }
-    /* 廣告版位（固定在 tabbar 上方） */
-    .ad-banner { position: fixed; bottom: 62px; left: 0; right: 0; max-width: 480px; margin: 0 auto; padding: 0 12px 8px; z-index: 49; display: none; }
-    .ad-banner img { width: 100%; height: auto; display: block; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,60,50,0.12); cursor: pointer; }
-    .app.has-banner { padding-bottom: 170px; }
+    /* 廣告版位（固定在 tabbar 上方，扁平貼底、不浮動） */
+    .ad-banner { position: fixed; bottom: 62px; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 72px; z-index: 49; display: none; background: #fff; border-top: 1px solid #e5ecea; }
+    .ad-banner img { width: 100%; height: 100%; display: block; object-fit: cover; cursor: pointer; }
+    .app.has-banner { padding-bottom: 144px; }
+    /* 設定頁完成按鈕：sticky 貼在 banner 上方，避免被蓋住點不到 */
+    .settings-cta-sticky { position: sticky; bottom: 82px; z-index: 55; }
     /* status */
     .status { text-align: center; padding: 8px; font-size: 13px; color: #7a8a87; }
     .status.ok { color: #2e7d32; } .status.err { color: #c62828; }
@@ -609,7 +611,7 @@
 
     // 聯繫客服
     function openSupport() {
-      const email = 'vasement@gmail.com';
+      const email = 'support@example.com'; // TODO: 換成真正的客服信箱
       const subject = encodeURIComponent('[Youown] 問題回報 / 建議');
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
@@ -671,7 +673,7 @@
         html += '</div>';
       }
 
-      html += '<button id="bankDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
+      html += '<button id="bankDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
       html += '</div>';
       document.getElementById('bankSettingContent').innerHTML = html;
 
@@ -818,7 +820,7 @@
           + '<button class="tab-toggle" data-key="' + t.key + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:5px 14px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ 顯示':'隱藏中') + '</button></div>';
       }
       html += '</div>';
-      html += '<button id="tabDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;">完成</button>';
+      html += '<button id="tabDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
       html += '</div>';
       document.getElementById('tabSettingContent').innerHTML = html;
 
@@ -885,7 +887,7 @@
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblMid">普通（' + prefs.thresholdLow + '-' + prefs.thresholdHigh + '%）</div><input type="text" id="prefEmojiMid" value="' + prefs.emojiMid + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblLow">很省（<' + prefs.thresholdLow + '%）</div><input type="text" id="prefEmojiLow" value="' + prefs.emojiLow + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '</div></div>';
-      html += '<button id="prefDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
+      html += '<button id="prefDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
       html += '</div>';
       document.getElementById('prefSettingContent').innerHTML = html;
 
@@ -980,7 +982,7 @@
         html += '</div>';
       }
 
-      html += '<button id="myBanksDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;">完成</button>';
+      html += '<button id="myBanksDoneBtn" class="settings-cta-sticky" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:16px 0 24px;box-shadow:0 -4px 12px rgba(0,0,0,0.08);">完成</button>';
       html += '</div>';
       document.getElementById('myBanksContent').innerHTML = html;
 
