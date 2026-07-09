@@ -624,7 +624,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼只會暫存在這台裝置，關閉 App 後即自動清除。</div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -660,8 +660,11 @@
         + '・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識<br>'
         + '・現金與未收到 Email 通知的交易請手動新增<br>'
         + '・其他銀行、卡片類型與更多功能陸續開發中</div>';
-      // 密碼說明
-      html += '<div class="info-banner">PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div>';
+      // 記住密碼開關（取代原本的密碼說明）
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
+        + '<div><div style="font-size:14px;font-weight:600;">記住 PDF 密碼</div>'
+        + '<div style="font-size:11px;color:#9aa;margin-top:3px;">密碼僅存於此裝置，不會上傳；登出即清除。共用裝置建議不要開啟。</div></div>'
+        + '<button id="rememberPwToggle" style="border:1px solid ' + (rememberPw?'#00897b':'#dde8e5') + ';background:' + (rememberPw?'#00897b':'#fff') + ';color:' + (rememberPw?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0;margin-left:10px;">' + (rememberPw?'✓ 開':'關') + '</button></div>';
 
       html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:4px 4px 10px;">勾選要同步的項目</div>';
 
@@ -697,12 +700,6 @@
         }
         html += '</div>';
       }
-
-      // 記住密碼開關
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
-        + '<div><div style="font-size:14px;font-weight:600;">記住 PDF 密碼</div>'
-        + '<div style="font-size:11px;color:#9aa;margin-top:3px;">密碼僅存於此裝置，不會上傳；登出即清除。共用裝置建議不要開啟。</div></div>'
-        + '<button id="rememberPwToggle" style="border:1px solid ' + (rememberPw?'#00897b':'#dde8e5') + ';background:' + (rememberPw?'#00897b':'#fff') + ';color:' + (rememberPw?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0;margin-left:10px;">' + (rememberPw?'✓ 開':'關') + '</button></div>';
 
       html += '<button id="bankDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
