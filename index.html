@@ -29,6 +29,11 @@
     .qa-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; }
     .qa-label { font-size: 12px; opacity: 0.5; margin-bottom: 6px; }
     .qa-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; margin-bottom: 12px; }
+    /* 分類篩選標籤列（消費/發票頁，橫向滑動） */
+    .cat-filter-row { display: flex; gap: 6px; overflow-x: auto; padding: 2px 2px 8px; -webkit-overflow-scrolling: touch; margin-bottom: 6px; }
+    .cat-filter-row::-webkit-scrollbar { display: none; }
+    .cat-chip { flex-shrink: 0; padding: 6px 13px; border-radius: 20px; border: 1px solid #dde8e5; background: #fff; color: #556; font-size: 13px; cursor: pointer; white-space: nowrap; }
+    .cat-chip.active { background: #00897b; border-color: #00897b; color: #fff; font-weight: 600; }
     .qa-chips::-webkit-scrollbar { display: none; }
     .qa-chip { padding: 7px 13px; border-radius: 9px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; background: #f5f5f5; color: #333; }
     .qa-chip.active { background: #00897b; color: #fff; }
@@ -316,9 +321,8 @@
         { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['bank_colors', JSON.stringify(bankColors)]] }) });
     }
 
-    // 分類：待分類為系統保留，其餘為預設 + 用戶自訂
+    // 分類：「待分類」為系統保留；其餘分類全部來自用戶建立的分類規則，刪光規則該分類即消失
     const SYSTEM_CATEGORY = '待分類';
-    const DEFAULT_CATEGORIES = ['飲食', '交通', '網購', '其他'];
     let categoryRules = []; // [{keyword, category}]
     async function loadCategoryRules() {
       if (!spreadsheetId) return;
@@ -331,12 +335,31 @@
     }
     function categoryForStore(store) {
       if (!store) return null;
-      const rule = categoryRules.find(r => store.includes(r.keyword));
+      // 最長關鍵字優先：具體規則（統一超商）贏過籠統規則（統一）
+      const rule = [...categoryRules].sort((a,b) => b.keyword.length - a.keyword.length).find(r => store.includes(r.keyword));
       return rule ? rule.category : null;
     }
     function allCategories() {
-      const set = new Set([...DEFAULT_CATEGORIES, ...categoryRules.map(r => r.category)]);
-      return [SYSTEM_CATEGORY, ...[...set]];
+      const set = new Set(categoryRules.map(r => r.category));
+      const ordered = catOrder.filter(c => set.has(c));       // 依用戶排序（僅保留仍存在的）
+      const rest = [...set].filter(c => !catOrder.includes(c)); // 新分類（還沒排過）排後面
+      return [SYSTEM_CATEGORY, ...ordered, ...rest];
+    }
+    // 分類顯示順序（套用到消費/發票頁標籤列），存 _config
+    let catOrder = [];
+    async function loadCatOrder() {
+      if (!spreadsheetId) return;
+      try {
+        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A1:B20',
+          { headers: { 'Authorization': 'Bearer ' + accessToken } });
+        const data = await res.json();
+        const row = (data.values || []).find(r => r[0] === 'cat_order');
+        catOrder = (row && row[1]) ? row[1].split(',') : [];
+      } catch(e) { catOrder = []; }
+    }
+    async function saveCatOrder() {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A8:B8?valueInputOption=RAW',
+        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['cat_order', catOrder.join(',')]] }) });
     }
     async function ensureCategoriesSheet() {
       const meta=await fetchSheetMeta();
@@ -496,6 +519,8 @@
     let expandedAcct = null;
     let showOlderPaid = false;
     let searchText = '';          // 搜尋關鍵字
+    let expCatFilter = '';        // 消費頁分類篩選（空=全部）
+    let invCatFilter = '';        // 發票頁分類篩選（空=全部）
     let sortMode = 'date';        // date | amount
     let collapsedMonths = new Set(); // 收合的月份
 
@@ -531,6 +556,7 @@
             await loadMyBanks();
             await loadBankColors();
             await loadCategoryRules();
+            await loadCatOrder();
             renderTabs();
             loadBanner();
             await loadAndRender();
@@ -777,7 +803,23 @@
         + '<button id="addRuleBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:600;cursor:pointer;">新增</button></div>';
       // 重新套用分類
       html += '<button id="reapplyBtn" style="width:100%;background:#fff;color:#00897b;border:1px solid #00897b;border-radius:10px;padding:11px;font-weight:600;cursor:pointer;margin-bottom:4px;">🔄 重新套用分類到現有發票</button>'
-        + '<div style="font-size:12px;color:#9aa;text-align:center;margin-bottom:12px;">新增或修改規則後，套用到已同步的發票</div>';
+        + '<div style="font-size:12px;color:#9aa;text-align:center;margin-bottom:12px;">依目前規則重算發票與已匹配消費的分類（手動改過的也會被規則覆蓋）</div>';
+      // 分類排序（套用到消費/發票頁的標籤列順序）
+      const userCats = allCategories().filter(c => c !== SYSTEM_CATEGORY);
+      if (userCats.length > 1) {
+        html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 4px;">分類排序</div>';
+        html += '<div style="font-size:11px;color:#bbc;margin:0 4px 10px;">用 ↑↓ 調整，會套用到消費與發票頁的標籤順序</div>';
+        html += '<div class="bank-block">';
+        userCats.forEach((c, idx) => {
+          html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f5f5f5;">'
+            + '<div style="display:flex;flex-direction:column;gap:2px;">'
+            + '<button class="cat-move-up" data-idx="' + idx + '" ' + (idx===0?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===0?'default':'pointer') + ';opacity:' + (idx===0?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▲</button>'
+            + '<button class="cat-move-down" data-idx="' + idx + '" ' + (idx===userCats.length-1?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===userCats.length-1?'default':'pointer') + ';opacity:' + (idx===userCats.length-1?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▼</button>'
+            + '</div>'
+            + '<div style="font-size:14px;font-weight:600;">' + c + '</div></div>';
+        });
+        html += '</div>';
+      }
       if (categoryRules.length) {
         html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 10px;">現有規則（' + categoryRules.length + '）</div>';
         categoryRules.forEach((r, i) => {
@@ -800,12 +842,24 @@
         renderCategorySetting();
         showToast('已新增規則');
       };
+      // 分類排序 ▲▼（移動後立即儲存）
+      const moveCat = async (idx, dir) => {
+        const cur = allCategories().filter(c => c !== SYSTEM_CATEGORY);
+        const j = idx + dir;
+        if (j < 0 || j >= cur.length) return;
+        [cur[idx], cur[j]] = [cur[j], cur[idx]];
+        catOrder = cur;
+        try { await saveCatOrder(); } catch(e) { showToast('儲存排序失敗'); }
+        renderCategorySetting();
+      };
+      document.querySelectorAll('.cat-move-up').forEach(btn => { btn.onclick = () => moveCat(parseInt(btn.dataset.idx), -1); });
+      document.querySelectorAll('.cat-move-down').forEach(btn => { btn.onclick = () => moveCat(parseInt(btn.dataset.idx), 1); });
       document.getElementById('reapplyBtn').onclick = async () => {
         const btn = document.getElementById('reapplyBtn');
         btn.disabled = true; btn.textContent = '套用中...';
         const n = await reapplyCategories();
         btn.disabled = false; btn.textContent = '🔄 重新套用分類到現有發票';
-        showToast('已更新 ' + n + ' 張發票的分類');
+        showToast('已更新 ' + n + ' 筆分類（含發票與對應消費）');
       };
       document.querySelectorAll('.del-rule').forEach(btn => {
         btn.onclick = async () => {
@@ -830,22 +884,54 @@
     // 依現在的規則，重新套分類到所有發票（只改 G 欄分類）
     async function reapplyCategories() {
       await loadCategoryRules();
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A2:G100000',{headers:{'Authorization':'Bearer '+accessToken}});
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A2:J100000',{headers:{'Authorization':'Bearer '+accessToken}});
       const data = await res.json();
       const rows = data.values || [];
-      const updates = [];
+      const invUpdates = [];
+      const matchedForExp = []; // { gmail_id, cat } 已匹配且分類有變的，之後要回頭更新消費
       rows.forEach((r, i) => {
         const store = r[1] || '';
         const cat = categoryForStore(store) || '';
-        if ((r[6]||'') !== cat) updates.push({ range: 'invoices!G'+(i+2), values: [[cat]] });
+        const status = r[7] || '';
+        const matchedExpId = r[8] || '';
+        const oldCat = r[6] || '';
+        if (oldCat !== cat) invUpdates.push({ range: 'invoices!G'+(i+2), values: [[cat]] });
+        if (status === '已匹配' && matchedExpId && cat) matchedForExp.push({ gmail_id: matchedExpId, cat, oldCat });
       });
-      if (updates.length) {
+      if (invUpdates.length) {
         // 分批（一次最多 100 個 range）
-        for (let i=0;i<updates.length;i+=100) {
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:updates.slice(i,i+100)})});
+        for (let i=0;i<invUpdates.length;i+=100) {
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:invUpdates.slice(i,i+100)})});
         }
       }
-      return updates.length;
+      // 回頭把新分類同步寫進已匹配的消費（只在消費仍是「待分類」時才覆蓋，保護用戶手動改過的分類）
+      let expUpdatedCount = 0;
+      if (matchedForExp.length) {
+        const allExp = await loadExpenses();
+        const expByGmailId = {};
+        allExp.forEach(e => { if (e.gmail_id) expByGmailId[e.gmail_id] = e; });
+        const expUpdates = [];
+        for (const m of matchedForExp) {
+          const exp = expByGmailId[m.gmail_id];
+          // 「重新套用」= 用戶明確要求照規則重算 → 已匹配消費直接跟隨發票的新分類（規則優先）
+          if (exp && exp.category !== m.cat) {
+            expUpdates.push({ range: 'expenses!F'+exp.row, values: [[m.cat]] });
+          }
+        }
+        if (expUpdates.length) {
+          for (let i=0;i<expUpdates.length;i+=100) {
+            await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:expUpdates.slice(i,i+100)})});
+          }
+          expUpdatedCount = expUpdates.length;
+        }
+      }
+      // 刷新快取：發票與消費一起更新，不用等下次同步
+      const [freshExp, freshInv] = await Promise.all([loadExpenses(), loadInvoices()]);
+      writeCache('expenses', freshExp);
+      writeCache('invoices', freshInv);
+      expensesData = freshExp;
+      invoicesData = freshInv;
+      return invUpdates.length + expUpdatedCount;
     }
 
     // ===== 顯示頁籤子頁 =====
@@ -1333,6 +1419,23 @@
     }
 
     // ===== 消費頁 =====
+    // 消費頁分類標籤列（點選篩選；再多分類也可左右滑）
+    function renderExpCatChips() {
+      const row = document.getElementById('expCatRow');
+      if (!row) return;
+      const cats = ['', ...allCategories()]; // ''=全部
+      row.innerHTML = cats.map(c =>
+        '<button class="cat-chip' + (expCatFilter === c ? ' active' : '') + '" data-cat="' + c + '">' + (c === '' ? '全部' : c) + '</button>'
+      ).join('') + '<button class="cat-chip" id="expAddCatChip" style="color:#00897b;border-color:#00897b;border-style:dashed;">＋ 分類</button>';
+      row.querySelectorAll('.cat-chip[data-cat]').forEach(chip => {
+        chip.onclick = () => {
+          expCatFilter = (expCatFilter === chip.dataset.cat) ? '' : chip.dataset.cat;
+          renderExpCatChips();
+          renderExpList();
+        };
+      });
+      document.getElementById('expAddCatChip').onclick = () => { openSettings(); openCategorySetting(); };
+    }
     function renderExpenses() {
       if (!expensesData.length) {
         setContent('<div class="empty">還沒有消費紀錄<br>按右上角「同步」抓取</div>');
@@ -1344,10 +1447,12 @@
         + '<input id="searchInput" type="text" placeholder="搜尋銀行、備註、金額、店名、分類" value="' + searchText.replace(/"/g,'&quot;') + '" />'
         + '<button class="search-clear" id="searchClear" style="display:' + (searchText?'block':'none') + '">×</button>'
         + '</div>'
+        + '<div class="cat-filter-row" id="expCatRow"></div>'
         + '<div class="sort-row"><span class="result-count" id="resultCount"></span>'
         + '<button class="sort-btn" id="sortToggle"></button></div>'
         + '<div id="expList"></div>';
       setContent(html);
+      renderExpCatChips();
 
       // 綁定搜尋框事件（只綁一次）
       const searchInput = document.getElementById('searchInput');
@@ -1382,6 +1487,7 @@
       if (clear) clear.style.display = searchText ? 'block' : 'none';
 
       let list = expensesData.slice();
+      if (expCatFilter) list = list.filter(e => (e.category || '待分類') === expCatFilter);
       const kw = searchText.trim().toLowerCase();
       if (kw) {
         list = list.filter(e =>
@@ -1943,11 +2049,17 @@
         setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步</div>');
         return;
       }
-      const unmatched = invoicesData.filter(i => i.status === '未匹配');
-      const matched = invoicesData.filter(i => i.status === '已匹配');
-      const ignored = invoicesData.filter(i => i.status === '忽略');
+      const catMatch = (i) => !invCatFilter || (i.category || '待分類') === invCatFilter;
+      const unmatched = invoicesData.filter(i => i.status === '未匹配' && catMatch(i));
+      const matched = invoicesData.filter(i => i.status === '已匹配' && catMatch(i));
+      const ignored = invoicesData.filter(i => i.status === '忽略' && catMatch(i));
 
-      let html = '<div class="inv-stat" style="margin-bottom:12px;">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>';
+      let html = '<div class="inv-stat" style="margin-bottom:8px;">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>';
+      // 分類篩選標籤列
+      const invCats = ['', ...allCategories()];
+      html += '<div class="cat-filter-row">' + invCats.map(c =>
+        '<button class="cat-chip inv-cat-chip' + (invCatFilter === c ? ' active' : '') + '" data-cat="' + c + '">' + (c === '' ? '全部' : c) + '</button>'
+      ).join('') + '<button class="cat-chip" id="invAddCatChip" style="color:#00897b;border-color:#00897b;border-style:dashed;">＋ 分類</button></div>';
 
       // 未匹配區
       if (unmatched.length) {
@@ -1999,6 +2111,14 @@
     }
 
     function bindInvoiceEvents() {
+      const addChip = document.getElementById('invAddCatChip');
+      if (addChip) addChip.onclick = () => { openSettings(); openCategorySetting(); };
+      document.querySelectorAll('.inv-cat-chip').forEach(chip => {
+        chip.onclick = () => {
+          invCatFilter = (invCatFilter === chip.dataset.cat) ? '' : chip.dataset.cat;
+          renderInvoices();
+        };
+      });
       document.querySelectorAll('.inv-btn-match').forEach(btn => {
         btn.onclick = () => {
           const no = btn.dataset.inv;
