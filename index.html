@@ -649,7 +649,7 @@
       // 資料來源說明
       html += '<div class="info-banner"><b>目前已支援同步</b><br>'
         + '・Gmail 銀行通知信自動記帳（需收到 Email 通知）<br>'
-        + '・信用卡消費通知及帳單（需收到 Email 通知）<br>'
+        + '・信用卡消費通知<br>'
         + '・同一銀行多張信用卡合併顯示<br>'
         + '・台新提款通知（目前僅支援無卡提款）<br>'
         + '・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識<br>'
@@ -970,7 +970,7 @@
       html += '<div class="info-banner">'
         + '・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。<br>'
         + '・輸入<b>目前正確的餘額</b>作為起始金額。<br>'
-        + '・同步後會依 Email 帳單/轉帳通知更新餘額；若部分交易沒有通知，可隨時修正餘額。'
+        + '・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。'
         + '</div>';
       // 銀行 chips
       html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
@@ -1072,6 +1072,26 @@
           await saveBankColors();
           await upsertAccountBalances(balances, myBanks);
           writeCache('accounts', await loadAccounts());
+          // 首次引導：依「需求 × 勾選銀行的能力」自動配同步選項，接著帶去同步設定填密碼
+          if (onboardingNeeds) {
+            syncOptions = {};
+            for (const bankName of myBanks) {
+              const cap = BANKS_SUPPORT.find(b => b.name === bankName);
+              if (!cap) continue;
+              const o = {};
+              if (cap.account) o.account = true; // 有帳戶通知就開，讓餘額能自動更新
+              if (onboardingNeeds.expense && cap.expense) o.expense = true;
+              if (onboardingNeeds.bill && cap.bill) o.bill = true;
+              if (Object.keys(o).length) syncOptions[bankName] = o;
+            }
+            if (onboardingNeeds.invoice) syncOptions['發票'] = { enabled: true };
+            await saveSyncOptions();
+            onboardingNeeds = null;
+            document.getElementById('myBanksView').style.display = 'none';
+            showToast('已依你的選擇設定同步項目');
+            openBankSetting(); // 帶去同步設定確認 + 填 PDF 密碼
+            return;
+          }
           document.getElementById('myBanksView').style.display = 'none';
           document.getElementById('settingsView').style.display = 'block';
           showToast('資產設定已儲存');
@@ -2593,29 +2613,52 @@
     }
 
     // ===== 首次登入引導 =====
+    // 首次引導選的需求，資產設定完成時據此自動配同步選項
+    let onboardingNeeds = null;
     function showOnboarding() {
+      const needs = { bill: false, expense: false, invoice: false };
       const overlay = document.createElement('div');
       overlay.className = 'qa-overlay';
-      overlay.innerHTML = '<div class="qa-panel" style="text-align:center;">'
-        + '<div style="font-size:40px;margin-bottom:8px;">👋</div>'
-        + '<div style="font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
-        + '<div style="font-size:13px;color:#7a8a87;margin-bottom:20px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
-        + '<div style="text-align:left;background:#f7faf9;border-radius:12px;padding:16px;margin-bottom:20px;font-size:14px;line-height:2;">'
-        + '<div><b>三步驟開始：</b></div>'
-        + '<div><b>資產設定</b>：勾選你的銀行、輸入目前餘額</div>'
-        + '<div><b>同步設定</b>：勾選要同步的項目、填 PDF 密碼</div>'
-        + '<div>回主畫面按<b>「同步」</b>，開始自動記帳</div>'
-        + '</div>'
-        + '<div class="qa-btns"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
-        + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">開始設定</button></div>'
-        + '</div>';
       document.body.appendChild(overlay);
-      document.getElementById('obSkip').onclick = () => overlay.remove();
-      document.getElementById('obStart').onclick = () => {
-        overlay.remove();
-        openSettings();
-        openMyBanksSetting();
-      };
+
+      function renderOb() {
+        const opt = (key, title, sub) =>
+          '<button class="ob-opt" data-key="' + key + '" style="display:block;width:100%;text-align:left;padding:14px;border-radius:12px;margin-bottom:10px;cursor:pointer;'
+          + 'border:2px solid ' + (needs[key] ? '#00897b' : '#dde8e5') + ';background:' + (needs[key] ? '#e8f5f3' : '#fff') + ';">'
+          + '<div style="font-size:15px;font-weight:600;">' + (needs[key] ? '✓ ' : '') + title + '</div>'
+          + '<div style="font-size:12px;color:#8a9a97;margin-top:3px;">' + sub + '</div></button>';
+        overlay.innerHTML = '<div class="qa-panel">'
+          + '<div style="text-align:center;font-size:40px;margin-bottom:8px;">👋</div>'
+          + '<div style="text-align:center;font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
+          + '<div style="text-align:center;font-size:13px;color:#7a8a87;margin-bottom:18px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
+          + '<div style="font-size:14px;font-weight:600;margin-bottom:10px;">你想同步什麼？（可複選）</div>'
+          + opt('bill', '信用卡帳單', '帳單直接從 Email 抓取，追蹤繳款')
+          + opt('expense', '每日消費', '信用卡消費通知自動記帳')
+          + opt('invoice', '發票匹配消費', '次月發票明細自動比對上月消費')
+          + '<div class="qa-btns" style="margin-top:8px;"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
+          + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">下一步：設定資產</button></div>'
+          + '</div>';
+        overlay.querySelectorAll('.ob-opt').forEach(btn => {
+          btn.onclick = () => { needs[btn.dataset.key] = !needs[btn.dataset.key]; renderOb(); };
+        });
+        document.getElementById('obSkip').onclick = () => overlay.remove();
+        document.getElementById('obStart').onclick = async () => {
+          if (!needs.bill && !needs.expense && !needs.invoice) { showToast('至少選一個'); return; }
+          onboardingNeeds = { ...needs };
+          // 依需求自動開啟頁籤（總覽、帳戶固定開）
+          const tabs = new Set(['cashflow', 'accounts']);
+          if (needs.bill) tabs.add('bills');
+          if (needs.expense) tabs.add('expenses');
+          if (needs.invoice) { tabs.add('invoices'); tabs.add('expenses'); } // 匹配依賴消費
+          enabledTabs = tabs;
+          try { await saveTabSettings(); } catch(e) {}
+          renderTabs();
+          overlay.remove();
+          openSettings();
+          openMyBanksSetting();
+        };
+      }
+      renderOb();
     }
 
     // ===== 廣告版位（banner.json 控制，改 JSON 即換廣告） =====
