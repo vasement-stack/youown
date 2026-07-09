@@ -624,7 +624,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼只會暫存在這台裝置，關閉 App 後即自動清除。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -666,7 +666,7 @@
         + '<div style="font-size:11px;color:#9aa;margin-top:3px;">密碼僅存於此裝置，不會上傳；登出即清除。共用裝置建議不要開啟。</div></div>'
         + '<button id="rememberPwToggle" style="border:1px solid ' + (rememberPw?'#00897b':'#dde8e5') + ';background:' + (rememberPw?'#00897b':'#fff') + ';color:' + (rememberPw?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0;margin-left:10px;">' + (rememberPw?'✓ 開':'關') + '</button></div>';
 
-      html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:4px 4px 10px;">勾選要同步的項目</div>';
+      html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:4px 4px 10px;">勾選已支援同步的項目</div>';
 
       // 電子發票（獨立，非銀行）
       const invOn = syncOptions['發票'] && syncOptions['發票'].enabled;
@@ -701,6 +701,7 @@
         html += '</div>';
       }
 
+      html += '<button id="resetSyncRangeBtn" style="width:100%;background:none;color:#00897b;border:1px solid #00897b;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;margin-bottom:10px;">重新設定同步起始日期</button>';
       html += '<button id="bankDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('bankSettingContent').innerHTML = html;
@@ -730,6 +731,20 @@
         rememberPw = !rememberPw;
         if (!rememberPw) { try { localStorage.removeItem(cacheKey('pw')); } catch(e) {} }
         renderBankSetting();
+      };
+      // 重新設定同步起始日期
+      document.getElementById('resetSyncRangeBtn').onclick = async () => {
+        if (!confirm('重新選擇同步起始日期？\n\n下次按「同步」時會重新詢問要抓多久以前的資料。已經同步進來的資料不會被刪除，只是可以把更早的資料補進來。')) return;
+        const btn = document.getElementById('resetSyncRangeBtn');
+        btn.disabled = true; btn.textContent = '處理中...';
+        try {
+          await resetSyncStartDate();
+          showToast('已重設，下次同步會重新詢問起始日期');
+          btn.textContent = '已重設，回主畫面按「同步」即可';
+        } catch (err) {
+          showToast('重設失敗：' + (err && err.message ? err.message : '請再試一次'));
+          btn.disabled = false; btn.textContent = '重新設定同步起始日期';
+        }
       };
       // 完成：存 config + 回設定頁
       document.getElementById('bankDoneBtn').onclick = async () => {
@@ -2501,7 +2516,7 @@
           return d.toISOString().slice(0,10);
         }
         let html = '<div class="qa-panel"><div class="qa-title">第一次同步：要抓多久以前的資料？</div>'
-          + '<div style="font-size:12px;color:#9aa;margin-bottom:16px;">之後每次同步只會抓「上次同步之後」的新資料，這個選擇只影響第一次。</div>'
+          + '<div style="font-size:12px;color:#e67e00;background:#fff8e8;border-radius:8px;padding:10px 12px;margin-bottom:14px;">選擇後只會同步這個日期<b>之後</b>的資料，之前的資料不會自動補上。之後可到「設定」重新選擇範圍。</div>'
           + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">'
           + opts.map((o,i) => '<button class="sync-start-opt" data-idx="' + i + '" style="padding:12px;border-radius:10px;border:1px solid #dde8e5;background:#fff;font-size:14px;cursor:pointer;text-align:left;">' + o.label + '</button>').join('')
           + '</div>'
@@ -2528,6 +2543,15 @@
     async function setLastSync(s) {
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/_config!A1:B1?valueInputOption=RAW',
         {method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['last_sync',s]]})});
+    }
+    // 重新設定同步起始日：清掉 last_sync 和 sync_start_date，下次同步會重新跳出選擇框
+    // 注意：已同步進來的資料不會被刪除，只是讓「下次同步」重新用新選的日期去抓信（去重機制會自動跳過已存在的）
+    async function resetSyncStartDate() {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',
+        {method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
+          {range:'_config!A1:B1',values:[['last_sync','']]},
+          {range:'_config!A7:B7',values:[['sync_start_date','']]}
+        ]})});
     }
     async function getExistingExpIds() {
       const res=await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/expenses!E2:E100000',{headers:{'Authorization':'Bearer '+accessToken}});
