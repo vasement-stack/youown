@@ -406,7 +406,7 @@
           { headers: { 'Authorization': 'Bearer ' + accessToken } });
         const data = await res.json();
         const row = (data.values || []).find(r => r[0] === 'my_banks');
-        myBanks = (row && row[1]) ? row[1].split(',') : null;
+        myBanks = row ? ((row[1]||'') ? row[1].split(',') : []) : null; // null=從沒設定過(觸發引導)；[]=引導完成但未設資產
       } catch(e) { myBanks = null; }
     }
     async function saveMyBanks() {
@@ -2616,7 +2616,7 @@
     // 首次引導選的需求，資產設定完成時據此自動配同步選項
     let onboardingNeeds = null;
     function showOnboarding() {
-      const needs = { bill: false, expense: false, invoice: false };
+      const needs = { bill: false, expense: false, invoice: false, asset: false };
       const overlay = document.createElement('div');
       overlay.className = 'qa-overlay';
       document.body.appendChild(overlay);
@@ -2631,31 +2631,54 @@
           + '<div style="text-align:center;font-size:40px;margin-bottom:8px;">👋</div>'
           + '<div style="text-align:center;font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
           + '<div style="text-align:center;font-size:13px;color:#7a8a87;margin-bottom:18px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
-          + '<div style="font-size:14px;font-weight:600;margin-bottom:10px;">你想同步什麼？（可複選）</div>'
+          + '<div style="font-size:14px;font-weight:600;margin-bottom:10px;">你想使用哪些功能？（可複選）</div>'
           + opt('bill', '信用卡帳單', '帳單直接從 Email 抓取，追蹤繳款')
           + opt('expense', '每日消費', '信用卡消費通知自動記帳')
           + opt('invoice', '發票匹配消費', '次月發票明細自動比對上月消費')
+          + opt('asset', '資產管理', '手動設定餘額，轉帳與卡費扣繳自動扣除、可隨時調整')
           + '<div class="qa-btns" style="margin-top:8px;"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
-          + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">下一步：設定資產</button></div>'
+          + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">下一步</button></div>'
           + '</div>';
         overlay.querySelectorAll('.ob-opt').forEach(btn => {
           btn.onclick = () => { needs[btn.dataset.key] = !needs[btn.dataset.key]; renderOb(); };
         });
         document.getElementById('obSkip').onclick = () => overlay.remove();
         document.getElementById('obStart').onclick = async () => {
-          if (!needs.bill && !needs.expense && !needs.invoice) { showToast('至少選一個'); return; }
+          if (!needs.bill && !needs.expense && !needs.invoice && !needs.asset) { showToast('至少選一個'); return; }
           onboardingNeeds = { ...needs };
-          // 依需求自動開啟頁籤（總覽、帳戶固定開）
-          const tabs = new Set(['cashflow', 'accounts']);
+          // 依需求開啟頁籤（總覽固定；帳戶只在選了資產管理時開）
+          const tabs = new Set(['cashflow']);
           if (needs.bill) tabs.add('bills');
           if (needs.expense) tabs.add('expenses');
           if (needs.invoice) { tabs.add('invoices'); tabs.add('expenses'); } // 匹配依賴消費
+          if (needs.asset) tabs.add('accounts');
           enabledTabs = tabs;
           try { await saveTabSettings(); } catch(e) {}
           renderTabs();
           overlay.remove();
-          openSettings();
-          openMyBanksSetting();
+          if (needs.asset) {
+            // 有資產需求 → 先設定資產（完成時自動配同步選項）
+            openSettings();
+            openMyBanksSetting();
+          } else {
+            // 沒有資產需求 → 跳過資產設定，直接配同步選項、帶去填密碼
+            try {
+              syncOptions = {};
+              for (const cap of BANKS_SUPPORT) {
+                const o = {};
+                if (onboardingNeeds.expense && cap.expense) o.expense = true;
+                if (onboardingNeeds.bill && cap.bill) o.bill = true;
+                if (Object.keys(o).length) syncOptions[cap.name] = o;
+              }
+              if (onboardingNeeds.invoice) syncOptions['發票'] = { enabled: true };
+              await saveSyncOptions();
+              myBanks = []; await saveMyBanks(); // 標記引導完成（避免下次又跳引導）
+            } catch(e) {}
+            onboardingNeeds = null;
+            showToast('已依你的選擇設定同步項目');
+            openSettings();
+            openBankSetting(); // 帶去同步設定確認 + 填 PDF 密碼
+          }
         };
       }
       renderOb();
