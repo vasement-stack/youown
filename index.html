@@ -450,6 +450,8 @@
 
     // 密碼記憶體（同 session，關頁面即清除，不落地不上雲）
     const sessionPasswords = {};
+    // 記住密碼（用戶自選，存 localStorage，登出/換帳號自動清除）
+    let rememberPw = false;
 
     let accessToken = null, tokenClient = null, spreadsheetId = null;
     let userEmail = '';
@@ -513,6 +515,9 @@
           const lastEmail = localStorage.getItem('imrich_last_email');
           if (lastEmail && lastEmail !== userEmail) clearCache();
           if (userEmail) localStorage.setItem('imrich_last_email', userEmail);
+          // 讀回記住的密碼（若用戶有開啟；換帳號時上面已清除）
+          const savedPw = readCache('pw');
+          if (savedPw) { Object.assign(sessionPasswords, savedPw); rememberPw = true; }
 
           document.getElementById('loginView').style.display = 'none';
           document.getElementById('mainView').style.display = 'block';
@@ -619,7 +624,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・・我們使用匿名流量統計（不含 cookie、無法識別個人），僅用於了解使用狀況。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼只會暫存在這台裝置，關閉 App 後即自動清除。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼只會暫存在這台裝置，關閉 App 後即自動清除。</div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -693,6 +698,12 @@
         html += '</div>';
       }
 
+      // 記住密碼開關
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
+        + '<div><div style="font-size:14px;font-weight:600;">記住 PDF 密碼</div>'
+        + '<div style="font-size:11px;color:#9aa;margin-top:3px;">密碼僅存於此裝置，不會上傳；登出即清除。共用裝置建議不要開啟。</div></div>'
+        + '<button id="rememberPwToggle" style="border:1px solid ' + (rememberPw?'#00897b':'#dde8e5') + ';background:' + (rememberPw?'#00897b':'#fff') + ';color:' + (rememberPw?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;flex-shrink:0;margin-left:10px;">' + (rememberPw?'✓ 開':'關') + '</button></div>';
+
       html += '<button id="bankDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('bankSettingContent').innerHTML = html;
@@ -717,9 +728,16 @@
       document.querySelectorAll('.pw-input').forEach(inp => {
         inp.oninput = () => { sessionPasswords[inp.dataset.bank] = inp.value; };
       });
+      // 記住密碼開關
+      document.getElementById('rememberPwToggle').onclick = () => {
+        rememberPw = !rememberPw;
+        if (!rememberPw) { try { localStorage.removeItem(cacheKey('pw')); } catch(e) {} }
+        renderBankSetting();
+      };
       // 完成：存 config + 回設定頁
       document.getElementById('bankDoneBtn').onclick = async () => {
         await saveSyncOptions();
+        if (rememberPw) writeCache('pw', sessionPasswords); // 依開關把密碼存本機
         document.getElementById('bankSettingView').style.display = 'none';
         document.getElementById('settingsView').style.display = 'block';
         showToast('設定已儲存');
@@ -2870,6 +2888,5 @@
     // ===== 同步按鈕 =====
     document.getElementById('syncBtn').onclick = doSync;
   </script>
-  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
