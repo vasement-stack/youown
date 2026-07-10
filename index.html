@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="YouOwn" />
   <link rel="icon" href="icon-192.png" />
   <script src="https://accounts.google.com/gsi/client"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, "Noto Sans TC", sans-serif; margin: 0; background: #f0f7f5; color: #1a2e2b; }
@@ -1842,11 +1842,20 @@
           trEl.innerHTML = '<div class="tr-row" style="opacity:.4;">載入中...</div>';
           const transfers = await loadTransfersForBank(bank);
           if (!transfers.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
-          trEl.innerHTML = transfers.map(t => {
+          const renderTrRows = (list) => list.map(t => {
             const isIn = ['轉入','收入'].includes(t.type);
             return '<div class="tr-row"><div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + '</div>'
               + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
           }).join('');
+          // 預設只顯示 5 筆，其餘收在「顯示更多」
+          if (transfers.length <= 5) {
+            trEl.innerHTML = renderTrRows(transfers);
+          } else {
+            trEl.innerHTML = renderTrRows(transfers.slice(0,5))
+              + '<div class="tr-row" id="trMore_' + esc(bank) + '" style="justify-content:center;color:#00897b;cursor:pointer;font-size:13px;">顯示更多（' + (transfers.length-5) + ' 筆）</div>';
+            const moreBtn = document.getElementById('trMore_' + bank);
+            if (moreBtn) moreBtn.onclick = () => { trEl.innerHTML = renderTrRows(transfers); };
+          }
         };
       });
     }
@@ -2106,7 +2115,7 @@
           const expanded = invExpandedId === iv.invoice_no;
           const cat = iv.category ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+esc(iv.category)+'</span>') : '';
           html += '<div class="inv-card"><div class="inv-card-body">'
-            + '<div class="inv-top"><div><div class="inv-store">' + esc(shortStore(iv.store)) + cat + '</div>'
+            + '<div class="inv-top"><div><div class="inv-store inv-rule-trigger" data-store="' + esc(iv.store) + '" data-inv="' + esc(iv.invoice_no) + '" style="cursor:pointer;">' + esc(shortStore(iv.store)) + cat + (iv.category ? '' : ' <span style="font-size:10px;opacity:.35;">➕規則</span>') + '</div>'
             + '<div class="inv-meta">' + esc(iv.date.slice(5).replace('-','/')) + ' · ' + esc(iv.invoice_no) + '</div></div>'
             + '<div class="inv-amt">$' + fmt(iv.amount) + '</div></div>'
             + '<div class="inv-btns"><button class="inv-btn inv-btn-match" data-inv="' + esc(iv.invoice_no) + '">' + (expanded?'收起':'手動匹配') + '</button>'
@@ -2124,7 +2133,7 @@
       html += '<div class="inv-section-toggle" id="toggleMatched">已匹配（' + matched.length + '）' + (invShowMatched?'▲':'▼') + '</div>';
       if (invShowMatched) {
         for (const iv of matched) {
-          html += '<div class="inv-matched-row"><div><div style="font-weight:600;font-size:13px;">' + esc(shortStore(iv.store)) + '</div>'
+          html += '<div class="inv-matched-row"><div><div class="inv-rule-trigger" data-store="' + esc(iv.store) + '" data-inv="' + esc(iv.invoice_no) + '" style="font-weight:600;font-size:13px;cursor:pointer;">' + esc(shortStore(iv.store)) + '</div>'
             + '<div style="font-size:11px;opacity:.5;">' + esc(iv.date.slice(5).replace('-','/')) + ' · ' + esc(iv.invoice_no) + '</div>'
             + (iv.category?'<div style="font-size:11px;color:#00897b;margin-top:2px;">#' + esc(iv.category) + '</div>':'') + '</div>'
             + '<div style="display:flex;align-items:center;gap:10px;"><div style="font-weight:600;">$' + fmt(iv.amount) + '</div>'
@@ -2179,7 +2188,67 @@
       }
       return count;
     }
+    // 從發票店名快速建立分類規則：預帶短店名（可改），建完直接套用到該發票（及其已匹配消費）
+    function showAddRulePanel(fullStore, invoiceNo) {
+      const overlay = document.createElement('div');
+      overlay.className = 'qa-overlay';
+      const existingCats = allCategories().filter(c => c !== SYSTEM_CATEGORY);
+      overlay.innerHTML = '<div class="qa-panel"><div class="qa-title">新增分類規則</div>'
+        + '<div style="font-size:12px;color:#9aa;margin-bottom:14px;word-break:break-all;">' + esc(fullStore) + '</div>'
+        + '<div class="qa-label">店家關鍵字（可縮短讓規則更通用）</div>'
+        + '<input type="text" class="qa-input" id="ruleKw" value="' + esc(shortStore(fullStore)) + '" />'
+        + '<div class="qa-label">分類</div>'
+        + '<input type="text" class="qa-input" id="ruleCat" placeholder="輸入分類名稱，如 超商" />'
+        + (existingCats.length ? '<div class="qa-chips" style="margin-top:2px;">' + existingCats.map(c => '<button class="qa-chip rule-cat-chip" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('') + '</div>' : '')
+        + '<div class="qa-btns" style="margin-top:14px;"><button id="ruleCancel" style="flex:1;border:1px solid #ddd;background:none;">取消</button>'
+        + '<button id="ruleSave" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">新增規則並套用</button></div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      overlay.querySelectorAll('.rule-cat-chip').forEach(chip => {
+        chip.onclick = () => { document.getElementById('ruleCat').value = chip.dataset.cat; };
+      });
+      document.getElementById('ruleCancel').onclick = () => overlay.remove();
+      document.getElementById('ruleSave').onclick = async () => {
+        const kw = document.getElementById('ruleKw').value.trim();
+        const catName = document.getElementById('ruleCat').value.trim();
+        if (!kw || !catName) { showToast('請填關鍵字和分類'); return; }
+        const btn = document.getElementById('ruleSave');
+        btn.disabled = true; btn.textContent = '儲存中...';
+        try {
+          await addCategoryRule(kw, catName);
+          await loadCategoryRules();
+          // 直接套用到這張發票 + 其已匹配的消費
+          const allInv = await loadInvoices();
+          const inv = allInv.find(i => i.invoice_no === invoiceNo);
+          if (inv) {
+            const cat = categoryForStore(inv.store) || '';
+            const updates = [];
+            if (cat && inv.category !== cat) updates.push({ range: 'invoices!G'+inv.row, values: [[cat]] });
+            if (cat && inv.status === '已匹配' && inv.matched_expense) {
+              const allExp = await loadExpenses();
+              const exp = allExp.find(e => e.gmail_id === inv.matched_expense);
+              if (exp && exp.category !== cat) updates.push({ range: 'expenses!F'+exp.row, values: [[cat]] });
+            }
+            if (updates.length) {
+              await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:updates})});
+              const [freshExp, freshInv] = await Promise.all([loadExpenses(), loadInvoices()]);
+              writeCache('expenses', freshExp); writeCache('invoices', freshInv);
+              expensesData = freshExp; invoicesData = freshInv;
+            }
+          }
+          overlay.remove();
+          showToast('已套用分類至此筆發票。其他同店名發票欲套用，請至「設定 → 分類規則」按重新套用');
+          renderInvoices();
+        } catch (err) {
+          showToast('失敗：' + (err && err.message ? err.message : '請再試一次'));
+          btn.disabled = false; btn.textContent = '新增規則並套用';
+        }
+      };
+    }
     function bindInvoiceEvents() {
+      document.querySelectorAll('.inv-rule-trigger').forEach(el => {
+        el.onclick = (ev) => { ev.stopPropagation(); showAddRulePanel(el.dataset.store, el.dataset.inv); };
+      });
       const rmBtn = document.getElementById('rematchBtn');
       if (rmBtn) rmBtn.onclick = async () => {
         rmBtn.disabled = true; rmBtn.textContent = '匹配中...';
