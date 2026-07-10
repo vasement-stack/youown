@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-title" content="YouOwn" />
   <link rel="icon" href="icon-192.png" />
   <script src="https://accounts.google.com/gsi/client"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" integrity="sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, "Noto Sans TC", sans-serif; margin: 0; background: #f0f7f5; color: #1a2e2b; }
@@ -722,7 +722,7 @@
           if (b.bill) pdfUses.push('帳單');
           const pwLabel = pdfUses.join('/') + ' PDF 密碼';
           html += '<div class="pw-label">' + pwLabel + '</div>';
-          html += '<input class="pw-input" type="password" data-bank="' + b.name + '" placeholder="輸入 ' + b.name + ' PDF 密碼" value="' + (sessionPasswords[b.name]||'') + '" />';
+          html += '<input class="pw-input" type="password" data-bank="' + esc(b.name) + '" placeholder="輸入 ' + esc(b.name) + ' PDF 密碼" value="' + esc(sessionPasswords[b.name]||'') + '" />';
         }
         html += '</div>';
       }
@@ -824,7 +824,7 @@
         html += '<div style="font-size:13px;color:#8a9a97;font-weight:600;margin:16px 4px 10px;">現有規則（' + categoryRules.length + '）</div>';
         categoryRules.forEach((r, i) => {
           html += '<div class="bank-block" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;">'
-            + '<div><span style="font-weight:600;">' + r.keyword + '</span> <span style="opacity:.4;">→</span> <span style="color:#00897b;">' + r.category + '</span></div>'
+            + '<div><span style="font-weight:600;">' + esc(r.keyword) + '</span> <span style="opacity:.4;">→</span> <span style="color:#00897b;">' + esc(r.category) + '</span></div>'
             + '<button class="del-rule" data-idx="' + i + '" style="background:none;border:none;color:#f44336;cursor:pointer;font-size:13px;">刪除</button></div>';
         });
       } else {
@@ -1093,7 +1093,7 @@
       for (const b of [...TW_BANKS, ...customs]) {
         const on = current.has(b);
         const canSync = syncable.has(b);
-        html += '<button class="mybank-chip" data-bank="' + b + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + b + (canSync?' ⚡':'') + '</button>';
+        html += '<button class="mybank-chip" data-bank="' + esc(b) + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + esc(b) + (canSync?' ⚡':'') + '</button>';
       }
       html += '</div>';
       // 自訂新增
@@ -1115,9 +1115,9 @@
             + '<button class="bank-move-up" data-idx="' + idx + '" ' + (idx===0?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===0?'default':'pointer') + ';opacity:' + (idx===0?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▲</button>'
             + '<button class="bank-move-down" data-idx="' + idx + '" ' + (idx===selected.length-1?'disabled':'') + ' style="border:none;background:none;cursor:' + (idx===selected.length-1?'default':'pointer') + ';opacity:' + (idx===selected.length-1?'.2':'.6') + ';font-size:13px;padding:0;line-height:1;">▼</button>'
             + '</div>'
-            + '<input type="color" class="bank-color-input" data-bank="' + b + '" value="' + getBankColor(b) + '" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" />'
-            + '<div style="width:72px;font-size:14px;font-weight:600;flex-shrink:0;">' + b + '</div>'
-            + '<input type="number" class="bal-input pw-input" data-bank="' + b + '" placeholder="目前餘額" value="' + bal + '" style="flex:1;margin:0;" /></div>';
+            + '<input type="color" class="bank-color-input" data-bank="' + esc(b) + '" value="' + getBankColor(b) + '" style="width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;padding:0;flex-shrink:0;" />'
+            + '<div style="width:72px;font-size:14px;font-weight:600;flex-shrink:0;">' + esc(b) + '</div>'
+            + '<input type="number" class="bal-input pw-input" data-bank="' + esc(b) + '" placeholder="目前餘額" value="' + bal + '" style="flex:1;margin:0;" /></div>';
         });
         html += '</div>';
       }
@@ -1239,7 +1239,7 @@
     }
 
     function chipToggle(bank, type, label, active) {
-      return '<button class="chip-toggle" data-bank="' + bank + '" data-type="' + type + '" '
+      return '<button class="chip-toggle" data-bank="' + esc(bank) + '" data-type="' + type + '" '
         + 'style="border:1px solid ' + (active?'#00897b':'#dde8e5') + ';background:' + (active?'#00897b':'#fff') + ';'
         + 'color:' + (active?'#fff':'#556') + ';border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:' + (active?'600':'400') + ';">'
         + (active?'✓ ':'') + label + '</button>';
@@ -1402,6 +1402,8 @@
 
     function setContent(html) { document.getElementById('content').innerHTML = html; }
     function fmt(n) { return Number(n||0).toLocaleString('en-US'); }
+    // HTML 轉義：所有來自信件內容/用戶輸入的文字進 innerHTML 前必須經過，防 stored XSS
+    function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     // toast 提示
     function showToast(msg) {
@@ -1425,7 +1427,7 @@
       if (!row) return;
       const cats = ['', ...allCategories()]; // ''=全部
       row.innerHTML = cats.map(c =>
-        '<button class="cat-chip' + (expCatFilter === c ? ' active' : '') + '" data-cat="' + c + '">' + (c === '' ? '全部' : c) + '</button>'
+        '<button class="cat-chip' + (expCatFilter === c ? ' active' : '') + '" data-cat="' + esc(c) + '">' + (c === '' ? '全部' : esc(c)) + '</button>'
       ).join('') + '<button class="cat-chip" id="expAddCatChip" style="color:#00897b;border-color:#00897b;border-style:dashed;">＋ 分類</button>';
       row.querySelectorAll('.cat-chip[data-cat]').forEach(chip => {
         chip.onclick = () => {
@@ -1536,12 +1538,12 @@
             storeName = ' · ' + e.note;
           }
           const catTag = (e.category && e.category !== '待分類')
-            ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+e.category+'</span>')
+            ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+esc(e.category)+'</span>')
             : '';
-          const invNoTag = invNo ? ('<div style="font-size:11px;opacity:.4;margin-top:2px;">🧾 ' + invNo + '</div>') : '';
+          const invNoTag = invNo ? ('<div style="font-size:11px;opacity:.4;margin-top:2px;">🧾 ' + esc(invNo) + '</div>') : '';
           html += '<div class="exp-row exp-clickable" data-row="' + e.row + '" style="cursor:pointer;' + (e.excluded?'opacity:.4;':'') + '"><div class="exp-left">'
             + '<div class="exp-meta">' + e.date.slice(5).replace('-','/') + (e.excluded?' · 不列入':'') + '</div>'
-            + '<div class="exp-bank"><span class="dot" style="background:' + color + '"></span>' + e.bank + storeName + catTag + '</div>'
+            + '<div class="exp-bank"><span class="dot" style="background:' + color + '"></span>' + esc(e.bank) + esc(storeName) + catTag + '</div>'
             + invNoTag
             + '</div><div class="exp-amount">$' + fmt(e.amount) + '</div></div>';
         }
@@ -1578,15 +1580,15 @@
         let html = '<div class="qa-panel"><div class="qa-title">編輯消費</div>';
         // 資訊
         html += '<div style="background:#f7faf9;border-radius:10px;padding:12px;margin-bottom:14px;">'
-          + '<div style="display:flex;justify-content:space-between;"><span style="font-size:13px;opacity:.6;">' + e.date + ' · ' + e.bank + '</span><span style="font-weight:700;">$' + fmt(e.amount) + '</span></div>'
-          + (e.invoice_detail ? '<div style="font-size:12px;opacity:.5;margin-top:6px;word-break:break-all;">🧾 ' + e.invoice_detail.slice(0,80) + (e.invoice_detail.length>80?'…':'') + '</div>' : '')
+          + '<div style="display:flex;justify-content:space-between;"><span style="font-size:13px;opacity:.6;">' + esc(e.date) + ' · ' + esc(e.bank) + '</span><span style="font-weight:700;">$' + fmt(e.amount) + '</span></div>'
+          + (e.invoice_detail ? '<div style="font-size:12px;opacity:.5;margin-top:6px;word-break:break-all;">🧾 ' + esc(e.invoice_detail.slice(0,80)) + (e.invoice_detail.length>80?'…':'') + '</div>' : '')
           + '</div>';
         // 分類
         html += '<div class="qa-label">分類</div><div class="qa-chips">'
-          + cats.map(c => '<button class="qa-chip' + (editState.category===c?' active':'') + '" data-cat="' + c + '">' + c + '</button>').join('')
+          + cats.map(c => '<button class="qa-chip' + (editState.category===c?' active':'') + '" data-cat="' + esc(c) + '">' + esc(c) + '</button>').join('')
           + '</div>';
         // 備註
-        html += '<div class="qa-label">備註</div><input type="text" class="qa-input" id="editNote" value="' + editState.note.replace(/"/g,'&quot;') + '" placeholder="選填" />';
+        html += '<div class="qa-label">備註</div><input type="text" class="qa-input" id="editNote" value="' + esc(editState.note) + '" placeholder="選填" />';
         // 列入收支
         html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#f7faf9;border-radius:10px;padding:10px 12px;margin-bottom:14px;">'
           + '<div><div style="font-size:14px;font-weight:600;">列入收支統計</div>'
@@ -1660,7 +1662,7 @@
           const daysStr = days === null ? '' : (days < 0 ? '逾期 ' + Math.abs(days) + ' 天' : '剩 ' + days + ' 天');
           html += '<div class="bill-card" style="border-left:4px solid ' + urgentColor + ';">'
             + '<div class="bill-card-top"><div>'
-            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(b.bank) + ';width:9px;height:9px;"></span>' + b.bank + '</div>'
+            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(b.bank) + ';width:9px;height:9px;"></span>' + esc(b.bank) + '</div>'
             + '<div class="bill-due" style="color:' + urgentColor + ';">截止 ' + dueStr + (daysStr?' · '+daysStr:'') + '</div>'
             + '</div><div><div class="bill-amount">$' + fmt(b.total_amount) + '</div><div class="bill-tag">PDF 帳單</div></div></div>'
             + '<button class="btn-paid" data-key="' + b.key + '">✓ 標記已繳</button>'
@@ -1671,7 +1673,7 @@
         const recent = paid.slice(0,3);
         const older = paid.slice(3);
         html += '<div class="bill-section-title" style="color:#aaa;margin-top:20px;">✅ 已繳帳單</div>';
-        const renderPaidRow = b => '<div class="paid-row"><div><div class="pb-bank">' + b.bank + '</div>'
+        const renderPaidRow = b => '<div class="paid-row"><div><div class="pb-bank">' + esc(b.bank) + '</div>'
           + '<div class="pb-date">' + (b.due_date||'') + '</div></div><div style="font-weight:700;">$' + fmt(b.total_amount) + '</div></div>';
         html += recent.map(renderPaidRow).join('');
         if (showOlderPaid) html += older.map(renderPaidRow).join('');
@@ -1708,7 +1710,7 @@
           + '<button id="payRecordToggle" style="border:1px solid ' + (payState.record?'#00897b':'#dde8e5') + ';background:' + (payState.record?'#00897b':'#fff') + ';color:' + (payState.record?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;">' + (payState.record?'✓ 開':'關') + '</button></div>'
           // 扣款帳戶
           + (payState.record ? ('<label>扣款帳戶</label><div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:8px;">'
-            + banks.map(b => '<button class="pay-bank-chip" data-bank="' + b + '" style="flex-shrink:0;border:1px solid ' + (payState.deductBank===b?'#00897b':'#dde8e5') + ';background:' + (payState.deductBank===b?'#00897b':'#fff') + ';color:' + (payState.deductBank===b?'#fff':'#556') + ';border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;white-space:nowrap;">' + b + '</button>').join('')
+            + banks.map(b => '<button class="pay-bank-chip" data-bank="' + esc(b) + '" style="flex-shrink:0;border:1px solid ' + (payState.deductBank===b?'#00897b':'#dde8e5') + ';background:' + (payState.deductBank===b?'#00897b':'#fff') + ';color:' + (payState.deductBank===b?'#fff':'#556') + ';border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;white-space:nowrap;">' + esc(b) + '</button>').join('')
             + '</div>') : '')
           + '<div class="dialog-btns"><button style="background:#eee;color:#555;" id="payCancel">取消</button>'
           + '<button style="background:#00897b;color:#fff;" id="payConfirm">確認繳款</button></div></div>';
@@ -1795,16 +1797,16 @@
       for (const a of sorted) {
         const neg = a.balance < 0;
         const color = getBankColor(a.bank);
-        html += '<div class="acct-card" data-bank="' + a.bank + '">'
-          + '<div class="acct-head" data-bank="' + a.bank + '">'
-          + '<div class="acct-name"><span class="dot" style="background:' + color + ';width:9px;height:9px;"></span>' + a.bank
-          + '<button class="btn-fix" data-bank="' + a.bank + '">校正</button></div>'
+        html += '<div class="acct-card" data-bank="' + esc(a.bank) + '">'
+          + '<div class="acct-head" data-bank="' + esc(a.bank) + '">'
+          + '<div class="acct-name"><span class="dot" style="background:' + color + ';width:9px;height:9px;"></span>' + esc(a.bank)
+          + '<button class="btn-fix" data-bank="' + esc(a.bank) + '">校正</button></div>'
           + '<div class="acct-balance" style="color:' + (neg?'#f44336':'#00897b') + ';">' + (neg?'-':'') + '$' + fmt(Math.abs(a.balance)) + '</div>'
           + '</div>';
-        html += '<div class="acct-edit" id="edit_' + a.bank + '" style="display:none;">'
-          + '<input type="number" placeholder="輸入正確餘額" id="bal_' + a.bank + '" />'
-          + '<button data-bank="' + a.bank + '">確認</button></div>';
-        html += '<div class="acct-transfers" id="tr_' + a.bank + '"></div>';
+        html += '<div class="acct-edit" id="edit_' + esc(a.bank) + '" style="display:none;">'
+          + '<input type="number" placeholder="輸入正確餘額" id="bal_' + esc(a.bank) + '" />'
+          + '<button data-bank="' + esc(a.bank) + '">確認</button></div>';
+        html += '<div class="acct-transfers" id="tr_' + esc(a.bank) + '"></div>';
         html += '</div>';
       }
       setContent(html);
@@ -1842,7 +1844,7 @@
           if (!transfers.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
           trEl.innerHTML = transfers.map(t => {
             const isIn = ['轉入','收入'].includes(t.type);
-            return '<div class="tr-row"><div class="tr-meta">' + (t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + t.type + '</div>'
+            return '<div class="tr-row"><div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + '</div>'
               + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
           }).join('');
         };
@@ -1967,14 +1969,14 @@
         return 'rgb(' + r + ',' + g + ',' + b + ')';
       };
       const yIncColor = lighten(prefs.incColor, 70), yExpColor = lighten(prefs.expColor, 70);
-      const arrowStyle = (on) => 'background:none;border:none;color:#fff;font-size:16px;padding:0 8px;line-height:1;cursor:' + (on?'pointer':'default') + ';opacity:' + (on?'0.9':'0.25') + ';';
+      const arrowStyle = (on) => 'background:none;border:none;color:#fff;font-size:15px;padding:0 6px;line-height:1;cursor:' + (on?'pointer':'default') + ';opacity:' + (on?'0.9':'0.25') + ';';
       html += '<div style="background:linear-gradient(135deg,#1a2f2e,#00897b);border-radius:20px;padding:20px;margin-bottom:12px;color:#fff;">'
-        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
-        + '<button id="yearPrev" ' + (olderY?'':'disabled') + ' style="' + arrowStyle(!!olderY) + '">‹</button>'
+        + '<div style="display:flex;align-items:center;gap:2px;margin-bottom:4px;">'
         + '<div style="font-size:12px;opacity:.6;">📅 ' + curY + '年度</div>'
+        + '<button id="yearPrev" ' + (olderY?'':'disabled') + ' style="' + arrowStyle(!!olderY) + '">‹</button>'
         + '<button id="yearNext" ' + (newerY?'':'disabled') + ' style="' + arrowStyle(!!newerY) + '">›</button>'
         + '</div>'
-        + '<div style="font-size:28px;font-weight:700;margin-bottom:16px;text-align:center;">' + (yBal>=0?'+':'-') + '$' + fmt(Math.abs(yBal)) + '</div>'
+        + '<div style="font-size:28px;font-weight:700;margin-bottom:16px;">' + (yBal>=0?'+':'-') + '$' + fmt(Math.abs(yBal)) + '</div>'
         + '<div style="display:flex;justify-content:space-between;font-size:13px;">'
         + '<div><div style="opacity:.6;margin-bottom:2px;">收入</div><div style="font-weight:700;color:' + yIncColor + ';">+' + fmt(yIncome) + '</div></div>'
         + '<div style="text-align:right;"><div style="opacity:.6;margin-bottom:2px;">支出</div><div style="font-weight:700;color:' + yExpColor + ';">-' + fmt(yExpense) + '</div></div>'
@@ -2011,8 +2013,8 @@
           for (const g of groups) {
             const gkey = m.key + '|' + g.side + '|' + g.name;
             const gExpanded = expandedCfGroup === gkey;
-            html += '<div class="cf-group" data-gkey="' + gkey + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;cursor:pointer;">'
-              + '<div style="font-size:14px;font-weight:600;' + (g.gray?'opacity:.4;':'') + '">' + g.name + '</div>'
+            html += '<div class="cf-group" data-gkey="' + esc(gkey) + '" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;cursor:pointer;">'
+              + '<div style="font-size:14px;font-weight:600;' + (g.gray?'opacity:.4;':'') + '">' + esc(g.name) + '</div>'
               + '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:14px;font-weight:600;color:' + (g.gray?'#999':color) + ';">' + sign + fmt(g.total) + '</span>'
               + '<span style="font-size:11px;opacity:.4;">' + (gExpanded?'▲':'▼') + '</span></div></div>';
             if (gExpanded) {
@@ -2020,14 +2022,14 @@
               if (g.name === '消費' && g.categoryTotals) {
                 Object.entries(g.categoryTotals).sort((a,b)=>b[1]-a[1]).forEach(([cat, total]) => {
                   html += '<div style="display:flex;justify-content:space-between;padding:4px 0 4px 12px;font-size:12px;border-bottom:1px solid #f8f8f8;">'
-                    + '<span style="color:#888;">#' + cat + '</span>'
+                    + '<span style="color:#888;">#' + esc(cat) + '</span>'
                     + '<span style="font-weight:600;color:' + color + ';">' + sign + fmt(total) + '</span></div>';
                 });
               } else {
                 g.items.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(it => {
                   html += '<div style="display:flex;justify-content:space-between;padding:4px 0 4px 12px;font-size:12px;border-bottom:1px solid #f8f8f8;' + (g.gray?'opacity:.4;':'') + '">'
                     + '<span style="opacity:.5;">' + it.date.slice(5).replace('-','/') + '</span>'
-                    + '<span style="flex:1;padding-left:8px;">' + it.label + '</span>'
+                    + '<span style="flex:1;padding-left:8px;">' + esc(it.label) + '</span>'
                     + '<span style="font-weight:600;color:' + (g.gray?'#999':color) + ';">' + sign + fmt(it.amount) + '</span></div>';
                 });
               }
@@ -2095,22 +2097,22 @@
       // 分類篩選標籤列
       const invCats = ['', ...allCategories()];
       html += '<div class="cat-filter-row">' + invCats.map(c =>
-        '<button class="cat-chip inv-cat-chip' + (invCatFilter === c ? ' active' : '') + '" data-cat="' + c + '">' + (c === '' ? '全部' : c) + '</button>'
+        '<button class="cat-chip inv-cat-chip' + (invCatFilter === c ? ' active' : '') + '" data-cat="' + esc(c) + '">' + (c === '' ? '全部' : esc(c)) + '</button>'
       ).join('') + '<button class="cat-chip" id="invAddCatChip" style="color:#00897b;border-color:#00897b;border-style:dashed;">＋ 分類</button></div>';
 
       // 未匹配區
       if (unmatched.length) {
         for (const iv of unmatched) {
           const expanded = invExpandedId === iv.invoice_no;
-          const cat = iv.category ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+iv.category+'</span>') : '';
+          const cat = iv.category ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+esc(iv.category)+'</span>') : '';
           html += '<div class="inv-card"><div class="inv-card-body">'
-            + '<div class="inv-top"><div><div class="inv-store">' + shortStore(iv.store) + cat + '</div>'
-            + '<div class="inv-meta">' + iv.date.slice(5).replace('-','/') + ' · ' + iv.invoice_no + '</div></div>'
+            + '<div class="inv-top"><div><div class="inv-store">' + esc(shortStore(iv.store)) + cat + '</div>'
+            + '<div class="inv-meta">' + esc(iv.date.slice(5).replace('-','/')) + ' · ' + esc(iv.invoice_no) + '</div></div>'
             + '<div class="inv-amt">$' + fmt(iv.amount) + '</div></div>'
-            + '<div class="inv-btns"><button class="inv-btn inv-btn-match" data-inv="' + iv.invoice_no + '">' + (expanded?'收起':'手動匹配') + '</button>'
-            + '<button class="inv-btn inv-btn-ignore" data-ignore="' + iv.invoice_no + '">忽略</button></div></div>';
+            + '<div class="inv-btns"><button class="inv-btn inv-btn-match" data-inv="' + esc(iv.invoice_no) + '">' + (expanded?'收起':'手動匹配') + '</button>'
+            + '<button class="inv-btn inv-btn-ignore" data-ignore="' + esc(iv.invoice_no) + '">忽略</button></div></div>';
           if (expanded) {
-            html += '<div class="inv-match-list"><div class="inv-match-hint">選擇對應的消費（前後 7 天）</div><div id="nearbyExp_' + iv.invoice_no + '"></div></div>';
+            html += '<div class="inv-match-list"><div class="inv-match-hint">選擇對應的消費（前後 7 天）</div><div id="nearbyExp_' + esc(iv.invoice_no) + '"></div></div>';
           }
           html += '</div>';
         }
@@ -2122,11 +2124,11 @@
       html += '<div class="inv-section-toggle" id="toggleMatched">已匹配（' + matched.length + '）' + (invShowMatched?'▲':'▼') + '</div>';
       if (invShowMatched) {
         for (const iv of matched) {
-          html += '<div class="inv-matched-row"><div><div style="font-weight:600;font-size:13px;">' + shortStore(iv.store) + '</div>'
-            + '<div style="font-size:11px;opacity:.5;">' + iv.date.slice(5).replace('-','/') + ' · ' + iv.invoice_no + '</div>'
-            + (iv.category?'<div style="font-size:11px;color:#00897b;margin-top:2px;">#' + iv.category + '</div>':'') + '</div>'
+          html += '<div class="inv-matched-row"><div><div style="font-weight:600;font-size:13px;">' + esc(shortStore(iv.store)) + '</div>'
+            + '<div style="font-size:11px;opacity:.5;">' + esc(iv.date.slice(5).replace('-','/')) + ' · ' + esc(iv.invoice_no) + '</div>'
+            + (iv.category?'<div style="font-size:11px;color:#00897b;margin-top:2px;">#' + esc(iv.category) + '</div>':'') + '</div>'
             + '<div style="display:flex;align-items:center;gap:10px;"><div style="font-weight:600;">$' + fmt(iv.amount) + '</div>'
-            + '<button class="inv-rematch" data-inv="' + iv.invoice_no + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;white-space:nowrap;">重新配對</button></div></div>';
+            + '<button class="inv-rematch" data-inv="' + esc(iv.invoice_no) + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;white-space:nowrap;">重新配對</button></div></div>';
         }
       }
 
@@ -2134,10 +2136,10 @@
       html += '<div class="inv-section-toggle" id="toggleIgnored">已忽略（' + ignored.length + '）' + (invShowIgnored?'▲':'▼') + '</div>';
       if (invShowIgnored) {
         for (const iv of ignored) {
-          html += '<div class="inv-matched-row" style="opacity:.6;"><div><div style="font-weight:600;font-size:13px;">' + shortStore(iv.store) + '</div>'
+          html += '<div class="inv-matched-row" style="opacity:.6;"><div><div style="font-weight:600;font-size:13px;">' + esc(shortStore(iv.store)) + '</div>'
             + '<div style="font-size:11px;opacity:.5;">' + iv.date.slice(5).replace('-','/') + '</div></div>'
             + '<div style="display:flex;align-items:center;gap:10px;"><div style="font-weight:600;">$' + fmt(iv.amount) + '</div>'
-            + '<button class="inv-restore" data-inv="' + iv.invoice_no + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;">還原</button></div></div>';
+            + '<button class="inv-restore" data-inv="' + esc(iv.invoice_no) + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;">還原</button></div></div>';
         }
       }
 
@@ -2238,9 +2240,9 @@
       }).sort((a,b) => Math.abs(new Date(a.date)-invDate) - Math.abs(new Date(b.date)-invDate));
       if (!nearby.length) { el.innerHTML = '<div class="inv-exp-row" style="opacity:.4;justify-content:center;">附近沒有可配對的消費</div>'; return; }
       el.innerHTML = nearby.map(e => {
-        return '<div class="inv-exp-row" data-exp="' + e.gmail_id + '" data-row="' + e.row + '">'
-          + '<div><div style="font-size:13px;opacity:.5;">' + e.date.slice(5).replace('-','/') + ' · ' + e.bank + '</div>'
-          + '<div style="font-size:13px;margin-top:2px;">' + (e.category&&e.category!=='待分類'?'#'+e.category:'待分類') + '</div></div>'
+        return '<div class="inv-exp-row" data-exp="' + esc(e.gmail_id) + '" data-row="' + e.row + '">'
+          + '<div><div style="font-size:13px;opacity:.5;">' + esc(e.date.slice(5).replace('-','/')) + ' · ' + esc(e.bank) + '</div>'
+          + '<div style="font-size:13px;margin-top:2px;">' + esc(e.category&&e.category!=='待分類'?'#'+e.category:'待分類') + '</div></div>'
           + '<div style="font-weight:600;">$' + fmt(e.amount) + '</div></div>';
       }).join('');
       el.querySelectorAll('.inv-exp-row[data-exp]').forEach(row => {
@@ -2952,7 +2954,7 @@
         img.onclick = () => {
           if (!b.link) return;
           if (b.link.startsWith('mailto:')) window.location.href = b.link;
-          else window.open(b.link, '_blank');
+          else window.open(b.link, '_blank', 'noopener,noreferrer');
         };
         bannerActive = true;
         document.querySelector('.app').classList.add('has-banner');
@@ -2995,16 +2997,16 @@
       html += '<div class="qa-chips">' + QA_TYPES.map(t => '<button class="qa-chip' + (s.type===t?' active':'') + '" data-type="' + t + '">' + t + '</button>').join('') + '</div>';
       // 銀行
       html += '<div class="qa-label">' + (s.type==='互轉'?'從（轉出銀行）':'銀行／來源') + '</div>';
-      html += '<div class="qa-chips">' + userBankList().map(b => '<button class="qa-chip' + (s.bank===b?' active':'') + '" data-bank="' + b + '">' + b + '</button>').join('') + '</div>';
+      html += '<div class="qa-chips">' + userBankList().map(b => '<button class="qa-chip' + (s.bank===b?' active':'') + '" data-bank="' + esc(b) + '">' + esc(b) + '</button>').join('') + '</div>';
       if (s.type === '互轉') {
         html += '<div class="qa-label">到（轉入銀行）</div>';
-        html += '<div class="qa-chips">' + userBankList().map(b => '<button class="qa-chip' + (s.toBank===b?' active':'') + '" data-tobank="' + b + '">' + b + '</button>').join('') + '</div>';
+        html += '<div class="qa-chips">' + userBankList().map(b => '<button class="qa-chip' + (s.toBank===b?' active':'') + '" data-tobank="' + esc(b) + '">' + esc(b) + '</button>').join('') + '</div>';
       }
       // 支出：即時扣款開關（對應選定的銀行/來源）
       if (s.type === '支出') {
         html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#f7faf9;border-radius:10px;padding:10px 12px;margin-bottom:12px;">'
           + '<div><div style="font-size:14px;font-weight:600;">即時扣款</div>'
-          + '<div style="font-size:11px;color:#9aa;margin-top:2px;">' + (s.instantDeduct ? '會從「' + s.bank + '」餘額扣除（現金/簽帳）' : '不扣餘額（刷卡消費，繳卡費時才扣）') + '</div></div>'
+          + '<div style="font-size:11px;color:#9aa;margin-top:2px;">' + (s.instantDeduct ? '會從「' + esc(s.bank) + '」餘額扣除（現金/簽帳）' : '不扣餘額（刷卡消費，繳卡費時才扣）') + '</div></div>'
           + '<button id="qaDeductToggle" style="border:1px solid ' + (s.instantDeduct?'#00897b':'#dde8e5') + ';background:' + (s.instantDeduct?'#00897b':'#fff') + ';color:' + (s.instantDeduct?'#fff':'#556') + ';border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;">' + (s.instantDeduct?'✓ 開':'關') + '</button></div>';
       }
       html += '<div class="qa-label">金額</div><input type="number" class="qa-input amount" id="qaAmount" placeholder="0" value="' + s.amount + '" />';
