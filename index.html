@@ -1941,6 +1941,7 @@
       } catch(e) { return []; }
     }
 
+    let cfYear = null; // 年度卡目前顯示的年份（null=今年），點卡片在有資料的年份間循環
     function renderCashflow() {
       if (!cashflowData.length) {
         setContent('<div class="empty">還沒有收支資料<br>按右上角「同步」抓取</div>');
@@ -1949,6 +1950,35 @@
       const now = new Date();
       const curMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
       let html = '';
+      // ---- 年度卡（‹ › 箭頭切換年度） ----
+      const years = [...new Set(cashflowData.map(m => m.key.slice(0,4)))].sort((a,b)=>b.localeCompare(a)); // 新→舊
+      const curY = cfYear || String(now.getFullYear());
+      const yi = years.indexOf(curY);
+      const olderY = (yi > -1 && yi < years.length-1) ? years[yi+1] : (yi === -1 && years.length ? years[0] : null); // 更早的年份
+      const newerY = yi > 0 ? years[yi-1] : null; // 更新的年份
+      const yMonths = cashflowData.filter(m => m.key.startsWith(curY));
+      const yIncome = yMonths.reduce((s,m)=>s+m.income,0);
+      const yExpense = yMonths.reduce((s,m)=>s+m.expense,0);
+      const yBal = yIncome - yExpense;
+      // 收入/支出文字顏色沿用偏好設定，調亮以便在深色卡上可讀
+      const lighten = (hex, amt) => {
+        const n = parseInt(hex.slice(1), 16);
+        const r = Math.min(255, (n>>16) + amt), g = Math.min(255, ((n>>8)&255) + amt), b = Math.min(255, (n&255) + amt);
+        return 'rgb(' + r + ',' + g + ',' + b + ')';
+      };
+      const yIncColor = lighten(prefs.incColor, 70), yExpColor = lighten(prefs.expColor, 70);
+      const arrowStyle = (on) => 'background:none;border:none;color:#fff;font-size:16px;padding:0 8px;line-height:1;cursor:' + (on?'pointer':'default') + ';opacity:' + (on?'0.9':'0.25') + ';';
+      html += '<div style="background:linear-gradient(135deg,#1a2f2e,#00897b);border-radius:20px;padding:20px;margin-bottom:12px;color:#fff;">'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
+        + '<button id="yearPrev" ' + (olderY?'':'disabled') + ' style="' + arrowStyle(!!olderY) + '">‹</button>'
+        + '<div style="font-size:12px;opacity:.6;">📅 ' + curY + '年度</div>'
+        + '<button id="yearNext" ' + (newerY?'':'disabled') + ' style="' + arrowStyle(!!newerY) + '">›</button>'
+        + '</div>'
+        + '<div style="font-size:28px;font-weight:700;margin-bottom:16px;text-align:center;">' + (yBal>=0?'+':'-') + '$' + fmt(Math.abs(yBal)) + '</div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:13px;">'
+        + '<div><div style="opacity:.6;margin-bottom:2px;">收入</div><div style="font-weight:700;color:' + yIncColor + ';">+' + fmt(yIncome) + '</div></div>'
+        + '<div style="text-align:right;"><div style="opacity:.6;margin-bottom:2px;">支出</div><div style="font-weight:700;color:' + yExpColor + ';">-' + fmt(yExpense) + '</div></div>'
+        + '</div></div>';
       cashflowData.forEach((m) => {
         const max = Math.max(m.income, m.expense, 1);
         const incPct = (m.income / max) * 100;
@@ -2009,6 +2039,11 @@
       });
       setContent(html);
 
+      // 年度卡 ‹ › 箭頭切換年度
+      const yPrev = document.getElementById('yearPrev');
+      const yNext = document.getElementById('yearNext');
+      if (yPrev && olderY) yPrev.onclick = () => { cfYear = olderY; renderCashflow(); };
+      if (yNext && newerY) yNext.onclick = () => { cfYear = newerY; renderCashflow(); };
       document.querySelectorAll('.cf-toggle').forEach(head => {
         head.onclick = () => { const mm = head.dataset.month; expandedCfMonth = (expandedCfMonth===mm)?null:mm; renderCashflow(); };
       });
@@ -2054,7 +2089,9 @@
       const matched = invoicesData.filter(i => i.status === '已匹配' && catMatch(i));
       const ignored = invoicesData.filter(i => i.status === '忽略' && catMatch(i));
 
-      let html = '<div class="inv-stat" style="margin-bottom:8px;">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>';
+      let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
+        + '<div class="inv-stat">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>'
+        + '<button id="rematchBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">重新匹配</button></div>';
       // 分類篩選標籤列
       const invCats = ['', ...allCategories()];
       html += '<div class="cat-filter-row">' + invCats.map(c =>
@@ -2110,7 +2147,49 @@
       if (invExpandedId) loadNearbyExpenses(invExpandedId);
     }
 
+    // 重新匹配：未匹配發票 × 未匹配消費 補配一輪（規則同同步：金額+日期一致，一筆消費只配一次）
+    async function rematchInvoices() {
+      const [allInv, allExp] = await Promise.all([loadInvoices(), loadExpenses()]);
+      const unmatchedInv = allInv.filter(i => i.status === '未匹配');
+      const availExp = allExp.filter(e => e.status !== '已匹配');
+      const updates = [];
+      let count = 0;
+      for (const inv of unmatchedInv) {
+        const mi = availExp.findIndex(e => Number(e.amount) === Number(inv.amount) && e.date === inv.date);
+        if (mi === -1) continue;
+        const match = availExp.splice(mi, 1)[0];
+        const cat = categoryForStore(inv.store) || inv.category || '';
+        // 發票：狀態+配對消費（H、I 欄）
+        updates.push({ range: 'invoices!H'+inv.row+':I'+inv.row, values: [['已匹配', match.gmail_id]] });
+        // 消費：分類（僅在待分類且有規則分類時套）+狀態+明細（F、G、H 欄）
+        const newCat = (cat && match.category === '待分類') ? cat : match.category;
+        updates.push({ range: 'expenses!F'+match.row+':H'+match.row, values: [[newCat, '已匹配', inv.detail]] });
+        count++;
+      }
+      if (updates.length) {
+        for (let i=0;i<updates.length;i+=100) {
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:updates.slice(i,i+100)})});
+        }
+        // 刷新快取與記憶體，馬上生效
+        const [freshExp, freshInv] = await Promise.all([loadExpenses(), loadInvoices()]);
+        writeCache('expenses', freshExp); writeCache('invoices', freshInv);
+        expensesData = freshExp; invoicesData = freshInv;
+      }
+      return count;
+    }
     function bindInvoiceEvents() {
+      const rmBtn = document.getElementById('rematchBtn');
+      if (rmBtn) rmBtn.onclick = async () => {
+        rmBtn.disabled = true; rmBtn.textContent = '匹配中...';
+        try {
+          const n = await rematchInvoices();
+          showToast(n ? ('補配成功 ' + n + ' 筆') : '沒有可補配的組合');
+          renderInvoices();
+        } catch (err) {
+          showToast('匹配失敗：' + (err && err.message ? err.message : '請再試一次'));
+          rmBtn.disabled = false; rmBtn.textContent = '重新匹配';
+        }
+      };
       const addChip = document.getElementById('invAddCatChip');
       if (addChip) addChip.onclick = () => { openSettings(); openCategorySetting(); };
       document.querySelectorAll('.inv-cat-chip').forEach(chip => {
@@ -2284,14 +2363,30 @@
       return res.ok?res.json():null;
     }
     async function gmailSearch(query) {
-      const res=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?q='+encodeURIComponent(query)+'&maxResults=100',{headers:{'Authorization':'Bearer '+accessToken}});
-      const d=await res.json(); return d.messages||[];
+      // 自動翻頁抓完全部結果（單頁上限 100，多的要跟著 nextPageToken 繼續拿）
+      const all = [];
+      let pageToken = '';
+      do {
+        const url = 'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=' + encodeURIComponent(query) + '&maxResults=100' + (pageToken ? '&pageToken=' + pageToken : '');
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + accessToken } });
+        const d = await res.json();
+        if (d.messages) all.push(...d.messages);
+        pageToken = d.nextPageToken || '';
+      } while (pageToken && all.length < 3000); // 安全上限，避免極端情況抓不完
+      return all;
     }
 
     // ===== 消費 parser =====
     function parseHsbc(body){ if(body.includes('本次新增消費金額'))return null; const d=body.match(/於(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/<新臺幣 TWD>([\d,]+)/)||body.match(/新臺幣 TWD[>\s]*([\d,]+)/); const c=body.match(/末四碼(\d{4})/); if(!d||!a)return null; return [{date:d[1]+'-'+d[2]+'-'+d[3],bank:'匯豐',amount:parseInt(a[1].replace(/,/g,''),10),note:c?'卡末四碼'+c[1]:''}]; }
-    function parseSinopacPdf(text){ const results=[]; const year=new Date().getFullYear(); const cm=text.match(/卡號末四碼\s*(\d{4})/); const cardNo=cm?cm[1]:''; const re=/(?:正卡|附卡)\s+\d{4}\s+(\d{2})\s*\/\s*(\d{2})\s+\d{2}\s*[：:]\s*\d{2}\s+\w+\s+NT\$\s*([\d,]+)/g; let m; while((m=re.exec(text))!==null){results.push({date:year+'-'+m[1]+'-'+m[2],bank:'永豐',amount:parseInt(m[3].replace(/,/g,''),10),note:cardNo?'卡末四碼'+cardNo:''});} return results; }
-    function parseSkbank(subject){ const m=subject.match(/(\d{2})月(\d{2})日.*?末四碼(\d{4}).*?金額([\d,]+)元/); if(!m)return null; const year=new Date().getFullYear(); return [{date:year+'-'+m[1]+'-'+m[2],bank:'新光',amount:parseInt(m[4].replace(/,/g,''),10),note:'卡末四碼'+m[3]}]; }
+    // 信件內容只有月/日時，用「收信日期」推年份：組出的日期若晚於收信日（跨年），退一年
+    function inferDateFromMsg(mm, dd, msgDate) {
+      let y = msgDate.getFullYear();
+      const d = new Date(y, parseInt(mm,10)-1, parseInt(dd,10));
+      if (d.getTime() - msgDate.getTime() > 2*86400000) y -= 1; // 寬容2天避免時區誤差
+      return y + '-' + mm + '-' + dd;
+    }
+    function parseSinopacPdf(text, msgDate){ const results=[]; const cm=text.match(/卡號末四碼\s*(\d{4})/); const cardNo=cm?cm[1]:''; const re=/(?:正卡|附卡)\s+\d{4}\s+(\d{2})\s*\/\s*(\d{2})\s+\d{2}\s*[：:]\s*\d{2}\s+\w+\s+NT\$\s*([\d,]+)/g; let m; while((m=re.exec(text))!==null){results.push({date:inferDateFromMsg(m[1],m[2],msgDate),bank:'永豐',amount:parseInt(m[3].replace(/,/g,''),10),note:cardNo?'卡末四碼'+cardNo:''});} return results; }
+    function parseSkbank(subject, msgDate){ const m=subject.match(/(\d{2})月(\d{2})日.*?末四碼(\d{4}).*?金額([\d,]+)元/); if(!m)return null; return [{date:inferDateFromMsg(m[1],m[2],msgDate),bank:'新光',amount:parseInt(m[4].replace(/,/g,''),10),note:'卡末四碼'+m[3]}]; }
     function parseHncbPdf(text){ const results=[]; const re=/(\d{4})\s+(\d{4})\/(\d{2})\/(\d{2})\s+\d{2}:\d{2}\s+([\d,]+)\s+\d/g; let m; while((m=re.exec(text))!==null){const amount=parseInt(m[5].replace(/,/g,''),10); if(amount>0)results.push({date:m[2]+'-'+m[3]+'-'+m[4],bank:'華南',amount:amount,note:'卡末四碼'+m[1]});} return results; }
 
     // ===== 帳單 parser =====
@@ -2388,7 +2483,7 @@
     // 消費來源設定
     const EXPENSE_SOURCES = [
       { bank:'匯豐', query:'from:noreply@messaging.hsbc.com.tw subject:網路刷卡消費通知', type:'text', parse:(md)=>parseHsbc(extractBody(md.payload)) },
-      { bank:'新光', query:'from:CreditNotice@skbank.com.tw', type:'subject', parse:(md)=>{const h=md.payload.headers||[];const s=(h.find(x=>x.name==='Subject')||{}).value||'';return parseSkbank(s);} },
+      { bank:'新光', query:'from:CreditNotice@skbank.com.tw', type:'subject', parse:(md)=>{const h=md.payload.headers||[];const s=(h.find(x=>x.name==='Subject')||{}).value||'';return parseSkbank(s, new Date(parseInt(md.internalDate)));} },
       { bank:'永豐', query:'from:SpendService@sinopac.com has:attachment filename:pdf', type:'pdf', parse:parseSinopacPdf },
       { bank:'華南', query:'from:service@ms3.hncb.com.tw has:attachment filename:pdf', type:'pdf', parse:parseHncbPdf },
     ];
@@ -2445,7 +2540,7 @@
               if (src.type === 'pdf') {
                 const attId = findPdfAttachment(md.payload); if(!attId) return;
                 const attData = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msg.id+'/attachments/'+attId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
-                try { parsed = src.parse(await extractPdfText(b64ToAB(attData.data), pw)); } catch(e){ return; }
+                try { parsed = src.parse(await extractPdfText(b64ToAB(attData.data), pw), new Date(parseInt(md.internalDate))); } catch(e){ return; }
               } else { parsed = src.parse(md); }
               if (parsed) parsed.forEach((p,j) => { const mid=msg.id+'_'+j; if(!existingExpIds.has(mid)) expRows.push([p.date,p.bank,p.amount,p.note,mid,'待分類','待匹配','','','']); });
             }));
@@ -2495,7 +2590,7 @@
           if (!isEnabled(src.bank, 'bill')) continue;
           const pw = sessionPasswords[src.bank] || '';
           if (!pw) continue;
-          const msgs = await gmailSearch('from:'+src.sender+' has:attachment filename:pdf newer_than:120d');
+          const msgs = await gmailSearch('from:'+src.sender+' has:attachment filename:pdf ' + dateFilter);
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
             const attId = findPdfAttachment(md.payload); if(!attId) continue;
