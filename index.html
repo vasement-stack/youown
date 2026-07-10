@@ -593,15 +593,15 @@
           <h2>資料同步</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="openMyBanksSetting()">
-              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與初始餘額</div></div>
+              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與餘額</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openBankSetting()">
-              <div><div class="label">同步設定</div><div class="sub">同步 Gmail 的銀行通知與電子發票</div></div>
+              <div><div class="label">同步設定</div><div class="sub">同步 Gmail 的銀行通知（轉帳/消費/信用卡）與電子發票</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openCategorySetting()">
-              <div><div class="label">分類規則</div><div class="sub">店家關鍵字自動分類</div></div>
+              <div><div class="label">分類規則</div><div class="sub">依照發票明細店家關鍵字自動分類消費</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -2088,7 +2088,7 @@
       return name.replace(/股份有限公司.*$/,'').replace(/有限公司.*$/,'').replace(/分公司.*$/,'').trim() || name;
     }
 
-    let invShowMatched = false, invShowIgnored = false, invExpandedId = null, invNearbyExp = [];
+    let invShowMatched = false, invShowIgnored = false, invShowUnmatched = true, invExpandedId = null, invNearbyExp = [];
     function renderInvoices() {
       if (!invoicesData.length) {
         setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步</div>');
@@ -2108,8 +2108,9 @@
         '<button class="cat-chip inv-cat-chip' + (invCatFilter === c ? ' active' : '') + '" data-cat="' + esc(c) + '">' + (c === '' ? '全部' : esc(c)) + '</button>'
       ).join('') + '<button class="cat-chip" id="invAddCatChip" style="color:#00897b;border-color:#00897b;border-style:dashed;">＋ 分類</button></div>';
 
-      // 未匹配區
-      if (unmatched.length) {
+      // 未匹配區（收合，跟已匹配/忽略同款；預設展開）
+      html += '<div class="inv-section-toggle" id="toggleUnmatched">未匹配（' + unmatched.length + '）' + (invShowUnmatched?'▲':'▼') + '</div>';
+      if (invShowUnmatched && unmatched.length) {
         for (const iv of unmatched) {
           const expanded = invExpandedId === iv.invoice_no;
           const cat = iv.category ? ('<span style="font-size:11px;color:#00897b;background:#e8f5f3;padding:1px 7px;border-radius:10px;margin-left:6px;">'+esc(iv.category)+'</span>') : '';
@@ -2124,7 +2125,7 @@
           }
           html += '</div>';
         }
-      } else {
+      } else if (invShowUnmatched) {
         html += '<div style="text-align:center;opacity:.4;padding:40px;">沒有未匹配發票 🎉</div>';
       }
 
@@ -2284,6 +2285,8 @@
       document.querySelectorAll('.inv-restore').forEach(btn => {
         btn.onclick = async () => { await setInvoiceStatus(btn.dataset.inv, '未匹配'); showToast('已還原'); invoicesData = await getInvoicesData(true); writeCache("expenses", await loadExpenses()); renderInvoices(); };
       });
+      const tu = document.getElementById('toggleUnmatched');
+      if (tu) tu.onclick = () => { invShowUnmatched = !invShowUnmatched; renderInvoices(); };
       const tm = document.getElementById('toggleMatched');
       if (tm) tm.onclick = () => { invShowMatched = !invShowMatched; renderInvoices(); };
       const ti = document.getElementById('toggleIgnored');
