@@ -2583,16 +2583,22 @@
 
       try {
         const lastSync = await getLastSync();
-        let dateFilter, invoiceDateFilter;
+        let dateFilter, invoiceDateFilter, syncStart; // syncStart：發票以「資料日期」過濾的下限（YYYY-MM-DD）
         if (lastSync) {
           dateFilter = 'after:' + lastSync;
           invoiceDateFilter = 'after:' + lastSync;
+          syncStart = await getSavedSyncStartDate(); // 可能為 null（舊用戶沒存過）→ 不過濾
         } else {
           // 首次同步：用用戶自選的起始日期（若沒選過則先跳選擇框，見 doSync 呼叫處）
           const startDate = await getSyncStartDate(); // 格式 YYYY-MM-DD
+          syncStart = startDate;
           const [y,m,d] = startDate.split('-');
           dateFilter = 'after:' + y + '/' + parseInt(m) + '/' + parseInt(d);
-          invoiceDateFilter = dateFilter; // 發票也從同一天開始找（雙月信件會自然涵蓋前一期）
+          invoiceDateFilter = dateFilter; // 發票信照同一天開始搜（彙整信必晚於發票日期，不會漏）
+          // 語意：起始日＝「我要這天以後的資料」。發票另以 inv.date >= syncStart 過濾，
+          // 避免起始日後收到的彙整信把上一期（起始日前）的發票帶進來變成配不到的未匹配發票。
+          // 消費/轉帳通知信≈交易當天寄達，信件日即資料日，不需另過濾；
+          // 帳單刻意「不」用資料日期過濾：起始日後收到的帳單就是要繳的帳單（即使帳期涵蓋起始日前的消費）。
         }
 
         // ---- 消費 ----
@@ -2700,6 +2706,8 @@
             try {
               const csvText = decodeBase64Url(attData.data);
               parseInvoiceCsv(csvText).forEach(inv => {
+                // 用發票本身的日期過濾（syncStart 為 A7 起始日，不能用 lastSync——彙整信帶的是上個月的發票，會整批誤殺）
+                if (syncStart && inv.date < syncStart) return;
                 if (inv.invoice_no && !existingInvNos.has(inv.invoice_no) && !seenInv[inv.invoice_no]) {
                   seenInv[inv.invoice_no] = true;
                   parsedInvoices.push(inv);
