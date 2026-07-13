@@ -2512,7 +2512,10 @@
       for (const msg of resultMsgs) {
         if (existingTrIds.has('taishin_atm_'+msg.id)) { console.log('[台新提款] 結果通知', msg.id, '已存在，跳過'); continue; }
         const md = await fetchMsg(msg.id); if(!md) continue;
-        const r = parseTaishinResult(extractBody(md.payload));
+        const body = extractBody(md.payload);
+        const di = body.indexOf('結果');
+        console.log('[台新提款] 內文檢視:', JSON.stringify(di >= 0 ? body.slice(Math.max(0, di-10), di+50) : body.slice(0, 300)));
+        const r = parseTaishinResult(body);
         console.log('[台新提款] 結果通知', msg.id, 'parse:', r ? JSON.stringify(r) : '失敗');
         if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
         // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
