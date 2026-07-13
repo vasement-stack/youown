@@ -442,8 +442,8 @@
       return QA_BANKS; // 未設定用預設
     }
 
-    // 偏好（總覽顏色 / emoji）
-    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋' };
+    // 偏好（總覽顏色 / emoji / 帳單預估）
+    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋', billEstimate:false, closingDays:{} };
     let prefs = { ...DEFAULT_PREFS };
     async function loadPrefs() {
       if (!spreadsheetId) return;
@@ -1023,6 +1023,26 @@
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblMid">普通（' + prefs.thresholdLow + '-' + prefs.thresholdHigh + '%）</div><input type="text" id="prefEmojiMid" value="' + prefs.emojiMid + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblLow">很省（<' + prefs.thresholdLow + '%）</div><input type="text" id="prefEmojiLow" value="' + prefs.emojiLow + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '</div></div>';
+      // 信用卡帳單預估
+      const estBanks = [...new Set(expensesData.map(e => e.bank))].filter(b => b && b !== '現金');
+      html += '<div class="bank-block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
+        + '<div style="font-weight:600;">信用卡帳單預估</div>'
+        + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prefBillEst"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
+        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;">設定各銀行的結帳日，帳單頁會依當期消費累計預估金額。留空表示不預估該銀行。<br><span style="color:#e57373;">僅供預估參考，實際金額請以銀行帳單為準。</span></div>';
+      if (estBanks.length) {
+        for (const b of estBanks) {
+          const v = (prefs.closingDays && prefs.closingDays[b]) || '';
+          html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+            + '<span class="dot" style="background:' + getBankColor(b) + ';width:9px;height:9px;flex-shrink:0;"></span>'
+            + '<div style="flex:1;font-size:14px;">' + esc(b) + '</div>'
+            + '<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#9aa;">每月</span>'
+            + '<input type="number" class="pref-closing-day" data-bank="' + esc(b) + '" value="' + v + '" min="1" max="31" placeholder="—" style="width:56px;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:15px;text-align:center;" />'
+            + '<span style="font-size:12px;color:#9aa;">日結帳</span></div></div>';
+        }
+      } else {
+        html += '<div style="font-size:13px;color:#bbc;">還沒有消費紀錄，同步後再來設定</div>';
+      }
+      html += '</div>';
       html += '<button id="prefDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('prefSettingContent').innerHTML = html;
@@ -1047,6 +1067,18 @@
         prefs.emojiHigh = document.getElementById('prefEmojiHigh').value || '😱';
         prefs.emojiMid = document.getElementById('prefEmojiMid').value || '🤔';
         prefs.emojiLow = document.getElementById('prefEmojiLow').value || '🤗';
+        // 帳單預估設定
+        prefs.billEstimate = document.getElementById('prefBillEst') ? document.getElementById('prefBillEst').checked : false;
+        const cds = {};
+        let cdErr = false;
+        document.querySelectorAll('.pref-closing-day').forEach(inp => {
+          if (inp.value === '') return;
+          const d = parseInt(inp.value, 10);
+          if (isNaN(d) || d < 1 || d > 31) { cdErr = true; return; }
+          cds[inp.dataset.bank] = d;
+        });
+        if (cdErr) { showToast('結帳日需為 1–31 的數字'); return; }
+        prefs.closingDays = cds;
         await savePrefs();
         document.getElementById('prefSettingView').style.display = 'none';
         document.getElementById('settingsView').style.display = 'block';
@@ -1646,13 +1678,50 @@
     }
 
     // ===== 帳單頁 =====
+    // 依結帳日算「當期」區間：上次結帳日隔天 ～ 下次結帳日（含當天）。
+    // 結帳日超過當月天數時取月底（如設 31 遇 2 月 → 2/28-29）。回傳 YYYY-MM-DD 字串供與消費日期字串比較。
+    function closingPeriodFor(day) {
+      const dim = (y,m) => new Date(y, m+1, 0).getDate(); // m 為 0-based
+      const f = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const today = new Date();
+      const todayStr = f(today);
+      let cy = today.getFullYear(), cm = today.getMonth();
+      let closing = new Date(cy, cm, Math.min(day, dim(cy, cm)));
+      if (todayStr > f(closing)) { cm += 1; if (cm > 11) { cm = 0; cy += 1; } closing = new Date(cy, cm, Math.min(day, dim(cy, cm))); }
+      let py = cy, pm = cm - 1; if (pm < 0) { pm = 11; py -= 1; }
+      const prevClosing = new Date(py, pm, Math.min(day, dim(py, pm)));
+      const start = new Date(prevClosing.getTime() + 86400000);
+      return { start: f(start), end: f(closing) };
+    }
+    function renderBillEstimates() {
+      if (!prefs.billEstimate || !prefs.closingDays) return '';
+      const banks = Object.keys(prefs.closingDays);
+      if (!banks.length) return '';
+      let cards = '';
+      for (const bank of banks) {
+        const period = closingPeriodFor(prefs.closingDays[bank]);
+        const sum = expensesData.filter(e => e.bank === bank && !e.excluded && e.amount > 0
+          && e.date >= period.start && e.date <= period.end)
+          .reduce((s,e) => s + e.amount, 0);
+        const endStr = period.end.slice(5).replace('-','/');
+        cards += '<div class="bill-card" style="border-left:4px solid #90a4ae;opacity:0.92;">'
+          + '<div class="bill-card-top"><div>'
+          + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
+          + '<div class="bill-due" style="color:#90a4ae;">' + endStr + ' 結帳 · 本期累計</div>'
+          + '</div><div><div class="bill-amount" style="color:#607d8b;">$' + fmt(sum) + '</div><div class="bill-tag">預估</div></div></div>'
+          + '</div>';
+      }
+      if (!cards) return '';
+      return '<div class="bill-section-title" style="color:#90a4ae;">📊 本期預估</div>' + cards
+        + '<div style="font-size:11px;color:#bbc;margin:2px 4px 14px;">依你設定的結帳日與已同步消費累計，僅供預估參考，實際金額請以銀行帳單為準。</div>';
+    }
     function renderBills() {
       const pending = billsData.filter(b => b.status !== '已繳' && b.total_amount > 0)
         .sort((a,b) => (a.due_date||'').localeCompare(b.due_date||''));
       const paid = billsData.filter(b => b.status === '已繳' && b.total_amount > 0)
         .sort((a,b) => (b.due_date||'').localeCompare(a.due_date||''));
 
-      let html = '';
+      let html = renderBillEstimates();
       if (pending.length) {
         html += '<div class="bill-section-title" style="color:#f44336;">⚠️ 待繳帳單</div>';
         for (const b of pending) {
@@ -1679,7 +1748,7 @@
         if (showOlderPaid) html += older.map(renderPaidRow).join('');
         if (older.length) html += '<div class="show-more" id="togglePaid">' + (showOlderPaid ? '收起' : '顯示更多（' + older.length + ' 筆）') + '</div>';
       }
-      if (!pending.length && !paid.length) html = '<div class="empty">還沒有帳單<br>按右上角「同步」抓取</div>';
+      if (!pending.length && !paid.length) html += '<div class="empty">還沒有帳單<br>按右上角「同步」抓取</div>';
 
       setContent(html);
       document.querySelectorAll('.btn-paid').forEach(btn => { btn.onclick = () => openPayDialog(btn.dataset.key); });
