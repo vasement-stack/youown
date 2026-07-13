@@ -1083,9 +1083,11 @@
       html += '<div class="bank-block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
         + '<div style="font-weight:600;">帳單預估</div>'
         + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="cardEstToggle"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;">設定各銀行信用卡的結帳日，帳單頁會依當期已同步消費累計預估金額。留空表示不預估該銀行。<br>'
-        + '下方名單為<b>已有消費紀錄</b>的帳戶。若你的銀行尚未支援消費同步、或該銀行沒有消費通知信，也可以先到「資產設定」新增該帳戶，再用手動記帳記錄消費，該銀行就會出現在這裡並可啟用預估。<br>'
-        + '<span style="color:#e57373;">僅供預估參考，實際金額請以銀行帳單為準。</span></div>';
+        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;line-height:1.7;">'
+        + '・設定結帳日，帳單頁顯示當期消費累計<br>'
+        + '・留空＝不預估該銀行<br>'
+        + '・名單來自已有消費紀錄的帳戶；未支援同步的銀行可手動記帳後啟用<br>'
+        + '<span style="color:#e57373;">・僅供參考，實際以銀行帳單為準</span></div>';
       if (estBanks.length) {
         for (const b of estBanks) {
           const v = (prefs.closingDays && prefs.closingDays[b]) || '';
