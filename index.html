@@ -272,6 +272,15 @@
       <div id="prefSettingContent"></div>
     </div>
 
+    <!-- 信用卡預估子頁 -->
+    <div id="cardEstView" style="display:none;">
+      <div class="settings-head">
+        <button class="btn-back" id="cardEstBackBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <h1>信用卡預估</h1>
+      </div>
+      <div id="cardEstContent"></div>
+    </div>
+
     <!-- 我的銀行子頁 -->
     <div id="myBanksView" style="display:none;">
       <div class="settings-head">
@@ -603,6 +612,10 @@
             </div>
             <div class="setting-item" onclick="openCategorySetting()">
               <div><div class="label">分類規則</div><div class="sub">依照發票明細店家關鍵字自動分類消費</div></div>
+              <span class="arrow">›</span>
+            </div>
+            <div class="setting-item" onclick="openCardEstSetting()">
+              <div><div class="label">信用卡預估</div><div class="sub">依結帳日累計當期消費，帳單頁顯示預估金額</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -1023,26 +1036,6 @@
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblMid">普通（' + prefs.thresholdLow + '-' + prefs.thresholdHigh + '%）</div><input type="text" id="prefEmojiMid" value="' + prefs.emojiMid + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '<div style="flex:1;text-align:center;"><div class="pw-label" id="lblLow">很省（<' + prefs.thresholdLow + '%）</div><input type="text" id="prefEmojiLow" value="' + prefs.emojiLow + '" maxlength="4" style="width:100%;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:24px;text-align:center;" /></div>'
         + '</div></div>';
-      // 信用卡帳單預估
-      const estBanks = [...new Set(expensesData.map(e => e.bank))].filter(b => b && b !== '現金');
-      html += '<div class="bank-block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
-        + '<div style="font-weight:600;">信用卡帳單預估</div>'
-        + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="prefBillEst"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;">設定各銀行的結帳日，帳單頁會依當期消費累計預估金額。留空表示不預估該銀行。<br><span style="color:#e57373;">僅供預估參考，實際金額請以銀行帳單為準。</span></div>';
-      if (estBanks.length) {
-        for (const b of estBanks) {
-          const v = (prefs.closingDays && prefs.closingDays[b]) || '';
-          html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
-            + '<span class="dot" style="background:' + getBankColor(b) + ';width:9px;height:9px;flex-shrink:0;"></span>'
-            + '<div style="flex:1;font-size:14px;">' + esc(b) + '</div>'
-            + '<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#9aa;">每月</span>'
-            + '<input type="number" class="pref-closing-day" data-bank="' + esc(b) + '" value="' + v + '" min="1" max="31" placeholder="—" style="width:56px;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:15px;text-align:center;" />'
-            + '<span style="font-size:12px;color:#9aa;">日結帳</span></div></div>';
-        }
-      } else {
-        html += '<div style="font-size:13px;color:#bbc;">還沒有消費紀錄，同步後再來設定</div>';
-      }
-      html += '</div>';
       html += '<button id="prefDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
       html += '</div>';
       document.getElementById('prefSettingContent').innerHTML = html;
@@ -1067,22 +1060,64 @@
         prefs.emojiHigh = document.getElementById('prefEmojiHigh').value || '😱';
         prefs.emojiMid = document.getElementById('prefEmojiMid').value || '🤔';
         prefs.emojiLow = document.getElementById('prefEmojiLow').value || '🤗';
-        // 帳單預估設定
-        prefs.billEstimate = document.getElementById('prefBillEst') ? document.getElementById('prefBillEst').checked : false;
+        await savePrefs();
+        document.getElementById('prefSettingView').style.display = 'none';
+        document.getElementById('settingsView').style.display = 'block';
+        showToast('偏好已儲存');
+      };
+    }
+
+    // ===== 信用卡預估子頁 =====
+    document.getElementById('cardEstBackBtn').onclick = () => {
+      document.getElementById('cardEstView').style.display = 'none';
+      document.getElementById('settingsView').style.display = 'block';
+    };
+    function openCardEstSetting() {
+      document.getElementById('settingsView').style.display = 'none';
+      document.getElementById('cardEstView').style.display = 'block';
+      renderCardEstSetting();
+    }
+    function renderCardEstSetting() {
+      const estBanks = [...new Set(expensesData.map(e => e.bank))].filter(b => b && b !== '現金');
+      let html = '<div class="bank-setting">';
+      html += '<div class="bank-block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
+        + '<div style="font-weight:600;">帳單預估</div>'
+        + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="cardEstToggle"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
+        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;">設定各銀行信用卡的結帳日，帳單頁會依當期已同步消費累計預估金額。留空表示不預估該銀行。<br><span style="color:#e57373;">僅供預估參考，實際金額請以銀行帳單為準。</span></div>';
+      if (estBanks.length) {
+        for (const b of estBanks) {
+          const v = (prefs.closingDays && prefs.closingDays[b]) || '';
+          html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+            + '<span class="dot" style="background:' + getBankColor(b) + ';width:9px;height:9px;flex-shrink:0;"></span>'
+            + '<div style="flex:1;font-size:14px;">' + esc(b) + '</div>'
+            + '<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#9aa;">每月</span>'
+            + '<input type="number" class="pref-closing-day" data-bank="' + esc(b) + '" value="' + v + '" min="1" max="31" placeholder="—" style="width:56px;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:15px;text-align:center;" />'
+            + '<span style="font-size:12px;color:#9aa;">日結帳</span></div></div>';
+        }
+      } else {
+        html += '<div style="font-size:13px;color:#bbc;">還沒有消費紀錄，同步後再來設定</div>';
+      }
+      html += '</div>';
+      html += '<button id="cardEstDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
+      html += '</div>';
+      document.getElementById('cardEstContent').innerHTML = html;
+
+      document.getElementById('cardEstDoneBtn').onclick = async () => {
         const cds = {};
         let cdErr = false;
-        document.querySelectorAll('.pref-closing-day').forEach(inp => {
+        document.querySelectorAll('#cardEstContent .pref-closing-day').forEach(inp => {
           if (inp.value === '') return;
           const d = parseInt(inp.value, 10);
           if (isNaN(d) || d < 1 || d > 31) { cdErr = true; return; }
           cds[inp.dataset.bank] = d;
         });
         if (cdErr) { showToast('結帳日需為 1–31 的數字'); return; }
+        prefs.billEstimate = document.getElementById('cardEstToggle').checked;
         prefs.closingDays = cds;
         await savePrefs();
-        document.getElementById('prefSettingView').style.display = 'none';
+        document.getElementById('cardEstView').style.display = 'none';
         document.getElementById('settingsView').style.display = 'block';
-        showToast('偏好已儲存');
+        showToast('信用卡預估已儲存');
       };
     }
 
