@@ -2500,26 +2500,30 @@
         gmailSearch('from:taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
         gmailSearch('from:taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
       ]);
+      console.log('[台新提款] dateFilter=', dateFilter, '設定通知搜到', setupMsgs.length, '封；結果通知搜到', resultMsgs.length, '封');
       const setups = [];
       for (const msg of setupMsgs) {
         const md = await fetchMsg(msg.id); if(!md) continue;
         const p = parseTaishinSetup(extractBody(md.payload));
+        console.log('[台新提款] 設定通知', msg.id, 'parse:', p ? JSON.stringify(p) : '失敗');
         if (p) setups.push(p);
       }
       for (const msg of resultMsgs) {
-        if (existingTrIds.has('taishin_atm_'+msg.id)) continue;
+        if (existingTrIds.has('taishin_atm_'+msg.id)) { console.log('[台新提款] 結果通知', msg.id, '已存在，跳過'); continue; }
         const md = await fetchMsg(msg.id); if(!md) continue;
         const r = parseTaishinResult(extractBody(md.payload));
+        console.log('[台新提款] 結果通知', msg.id, 'parse:', r ? JSON.stringify(r) : '失敗');
         if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
         // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
         // 日期直接用原始斜線格式解析（YYYY/MM/DD HH:mm:ss 各瀏覽器皆支援；改成 dash+空格 Safari 會回 Invalid Date 導致排序失效）
         const rt = new Date(r.time).getTime();
         const match = setups.filter(s => s.account === r.account)
           .sort((a,b) => Math.abs(rt - new Date(a.time).getTime()) - Math.abs(rt - new Date(b.time).getTime()))[0];
-        if (!match) continue; // 找不到對應金額，無法記錄
+        if (!match) { console.log('[台新提款] 找不到同帳號設定通知，無法配對'); continue; }
         const dateStr = r.time.slice(0,10).replace(/\//g,'-');
         rows.push([dateStr,'台新','提款','','',match.amount,'taishin_atm_'+msg.id]);
       }
+      console.log('[台新提款] 最終寫入', rows.length, '筆');
       return rows;
     }
     function parseObankTransfer(body){ const dm=body.match(/(\d{2})日/); const a=body.match(/TWD\s*([\d,]+)元/)||body.match(/([\d,]+)元/); const type=body.includes('轉入')?'轉入':'轉出'; if(!dm||!a)return null; const now=new Date(); const day=parseInt(dm[1]); let month=day<=now.getDate()?now.getMonth()+1:(now.getMonth()>0?now.getMonth():12); let year=now.getFullYear(); if(month>now.getMonth()+1)year--; return {date:year+'-'+String(month).padStart(2,'0')+'-'+dm[1],bank:'王道',type,from_account:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
@@ -2792,6 +2796,7 @@
           }
         }
         // 台新無卡提款（設定通知+結果通知配對，只有配對成功才記錄）
+        console.log('[台新提款] isEnabled(台新,account)=', !!isEnabled('台新', 'account'));
         if (isEnabled('台新', 'account')) {
           const taishinRows = await syncTaishinAtmWithdrawals(dateFilter, existingTrIds);
           trRows.push(...taishinRows);
