@@ -2478,56 +2478,54 @@
     // ===== 帳戶(存款/轉帳) parser =====
     function parseSinopacTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/金額[：:]\s*NT?\$?\s*([\d,]+)/)||body.match(/([\d,]+)\s*元/); const fm=body.match(/轉出帳號[：:]\s*(\S+)/); const tm=body.match(/轉入帳號[：:]\s*(\S+)/); const type=body.includes('轉出')?'轉出':'轉入'; if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'永豐',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     function parseCtbcTransfer(body){ const d=body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/交易金額\s*新臺幣\s*([\d,]+)/); const type=body.includes('提領')?'提領':(body.includes('轉出')?'轉出':'轉入'); const acc=body.match(/交易帳號\s*(\S+)/); if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'中信',type,from_account:acc?acc[1]:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
-    // 台新無卡提款：需「設定通知」(有金額)配對「結果通知」(有成功與否)，兩者都有才記錄
+    // 台新無卡提款：「設定通知」(有金額)+「交易結果通知」(證明有實際執行)兩封配對。
+    // 決策（2026/07）：結果通知的「提款結果：提款成功」字樣無法穩定從 MIME 內文提取（曾導致整批漏記），
+    // 改反向判斷——結果通知這封信的存在即代表有去 ATM 執行（未執行不會寄此信），內文含「失敗」才排除。
+    // 金額只存在設定通知中，故仍需兩封配對（同帳號、時間最近）。
     function parseTaishinSetup(body) {
       const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
       const amt = (body.match(/提款金額[：:]\s*\$?\s*([\d,]+)/)||[])[1];
       const t = (body.match(/有效時間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
-      if (!acct || !amt || !t) return null;
+      // 設定失敗的通知不記（欄位間可能有空白，用 regex 容忍）
+      const ok = !/設定結果[：:]\s*失敗/.test(body);
+      if (!acct || !amt || !t || !ok) return null;
       return { account: acct, amount: parseInt(amt.replace(/,/g,''),10), time: t };
     }
     function parseTaishinResult(body) {
       const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
       const t = (body.match(/時\s*間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
-      // HTML 信件經 extractBody 去標籤後，欄位名與值之間會插入空格（如「提款結果： 提款成功」），不能用死字串 includes，要用容忍空白的 regex
-      const success = /提款結果[：:]\s*提款成功/.test(body);
+      // 反向判斷：含「失敗」才視為失敗，否則視為成功（見上方決策註解）
+      const success = !body.includes('失敗');
       if (!acct || !t) return null;
       return { account: acct, time: t, success };
     }
     async function syncTaishinAtmWithdrawals(dateFilter, existingTrIds) {
       const rows = [];
       const [setupMsgs, resultMsgs] = await Promise.all([
-        // 寄件人用網域比對（Gmail from: 為子字串匹配）：台新通知信有 webmaster@ 與 bhurecv 子網域等變體，寫死完整地址會漏抓
+        // 寄件人用網域比對（Gmail from: 為子字串匹配）：台新通知信寄件地址有子網域變體，寫死完整地址會漏抓
         gmailSearch('from:taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
         gmailSearch('from:taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
       ]);
-      console.log('[台新提款] dateFilter=', dateFilter, '設定通知搜到', setupMsgs.length, '封；結果通知搜到', resultMsgs.length, '封');
       const setups = [];
       for (const msg of setupMsgs) {
         const md = await fetchMsg(msg.id); if(!md) continue;
         const p = parseTaishinSetup(extractBody(md.payload));
-        console.log('[台新提款] 設定通知', msg.id, 'parse:', p ? JSON.stringify(p) : '失敗');
         if (p) setups.push(p);
       }
       for (const msg of resultMsgs) {
-        if (existingTrIds.has('taishin_atm_'+msg.id)) { console.log('[台新提款] 結果通知', msg.id, '已存在，跳過'); continue; }
+        if (existingTrIds.has('taishin_atm_'+msg.id)) continue;
         const md = await fetchMsg(msg.id); if(!md) continue;
-        const body = extractBody(md.payload);
-        const di = body.indexOf('結果');
-        console.log('[台新提款] 內文檢視:', JSON.stringify(di >= 0 ? body.slice(Math.max(0, di-10), di+50) : body.slice(0, 300)));
-        const r = parseTaishinResult(body);
-        console.log('[台新提款] 結果通知', msg.id, 'parse:', r ? JSON.stringify(r) : '失敗');
-        if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
-        // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
+        const r = parseTaishinResult(extractBody(md.payload));
+        if (!r || !r.success) continue; // 提款失敗不記
+        // 找同帳號、時間最近的設定通知拿金額
         // 日期直接用原始斜線格式解析（YYYY/MM/DD HH:mm:ss 各瀏覽器皆支援；改成 dash+空格 Safari 會回 Invalid Date 導致排序失效）
         const rt = new Date(r.time).getTime();
         const match = setups.filter(s => s.account === r.account)
           .sort((a,b) => Math.abs(rt - new Date(a.time).getTime()) - Math.abs(rt - new Date(b.time).getTime()))[0];
-        if (!match) { console.log('[台新提款] 找不到同帳號設定通知，無法配對'); continue; }
+        if (!match) continue; // 找不到對應金額，無法記錄
         const dateStr = r.time.slice(0,10).replace(/\//g,'-');
         rows.push([dateStr,'台新','提款','','',match.amount,'taishin_atm_'+msg.id]);
       }
-      console.log('[台新提款] 最終寫入', rows.length, '筆');
       return rows;
     }
     function parseObankTransfer(body){ const dm=body.match(/(\d{2})日/); const a=body.match(/TWD\s*([\d,]+)元/)||body.match(/([\d,]+)元/); const type=body.includes('轉入')?'轉入':'轉出'; if(!dm||!a)return null; const now=new Date(); const day=parseInt(dm[1]); let month=day<=now.getDate()?now.getMonth()+1:(now.getMonth()>0?now.getMonth():12); let year=now.getFullYear(); if(month>now.getMonth()+1)year--; return {date:year+'-'+String(month).padStart(2,'0')+'-'+dm[1],bank:'王道',type,from_account:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
@@ -2799,8 +2797,7 @@
             }));
           }
         }
-        // 台新無卡提款（設定通知+結果通知配對，只有配對成功才記錄）
-        console.log('[台新提款] isEnabled(台新,account)=', !!isEnabled('台新', 'account'));
+        // 台新無卡提款（設定通知拿金額＋結果通知證明有執行，配對成功才記，見 syncTaishinAtmWithdrawals 註解）
         if (isEnabled('台新', 'account')) {
           const taishinRows = await syncTaishinAtmWithdrawals(dateFilter, existingTrIds);
           trRows.push(...taishinRows);
