@@ -2489,7 +2489,8 @@
     function parseTaishinResult(body) {
       const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
       const t = (body.match(/時\s*間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
-      const success = body.includes('提款結果：提款成功') || body.includes('提款結果:提款成功');
+      // HTML 信件經 extractBody 去標籤後，欄位名與值之間會插入空格（如「提款結果： 提款成功」），不能用死字串 includes，要用容忍空白的 regex
+      const success = /提款結果[：:]\s*提款成功/.test(body);
       if (!acct || !t) return null;
       return { account: acct, time: t, success };
     }
