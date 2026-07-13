@@ -71,6 +71,8 @@
     .bank-block .pw-label { font-size: 12px; color: #9aa; margin-bottom: 5px; }
     .info-banner { background: #e8f5f3; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #456; line-height: 1.7; }
     .info-banner b { color: #00897b; }
+    /* 條列說明：第二行對齊文字而非頂到最左（懸掛縮排） */
+    .li-row { padding-left: 1em; text-indent: -1em; }
     /* 帳單頁 */
     .bill-section-title { font-size: 13px; font-weight: 600; margin: 4px 0 10px; padding-left: 4px; }
     .bill-card { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(0,60,50,0.06); margin-bottom: 12px; }
@@ -663,7 +665,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><div class="li-row">・所有財務資料都儲存在你的 Google 帳號。</div><div class="li-row">・我們不會儲存或查看你的財務資料。</div><div class="li-row">・裝置僅暫存快取，登出後自動清除。</div><div class="li-row">・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div></div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -691,14 +693,14 @@
     function renderBankSetting() {
       let html = '<div class="bank-setting">';
       // 資料來源說明
-      html += '<div class="info-banner"><b>目前已支援同步</b><br>'
-        + '・Gmail 銀行通知信自動記帳（需收到 Email 通知）<br>'
-        + '・信用卡消費通知<br>'
-        + '・同一銀行多張信用卡合併顯示<br>'
-        + '・台新提款通知（目前僅支援無卡提款）<br>'
-        + '・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識<br>'
-        + '・現金與未收到 Email 通知的交易請手動新增<br>'
-        + '・其他銀行、卡片類型與更多功能陸續開發中</div>';
+      html += '<div class="info-banner"><b>目前已支援同步</b>'
+        + '<div class="li-row">・Gmail 銀行通知信自動記帳（需收到 Email 通知）</div>'
+        + '<div class="li-row">・信用卡消費通知</div>'
+        + '<div class="li-row">・同一銀行多張信用卡合併顯示</div>'
+        + '<div class="li-row">・台新提款通知（目前僅支援無卡提款）</div>'
+        + '<div class="li-row">・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識</div>'
+        + '<div class="li-row">・現金與未收到 Email 通知的交易請手動新增</div>'
+        + '<div class="li-row">・其他銀行、卡片類型與更多功能陸續開發中</div></div>';
       // 記住密碼開關（取代原本的密碼說明）
       html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
         + '<div><div style="font-size:14px;font-weight:600;">記住 PDF 密碼</div>'
@@ -1084,10 +1086,10 @@
         + '<div style="font-weight:600;">帳單預估</div>'
         + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="cardEstToggle"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
         + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;line-height:1.7;">'
-        + '・設定結帳日，帳單頁顯示當期消費累計<br>'
-        + '・留空＝不預估該銀行<br>'
-        + '・名單來自已有消費紀錄的帳戶；未支援同步的銀行可手動記帳後啟用<br>'
-        + '<span style="color:#e57373;">・僅供參考，實際以銀行帳單為準</span></div>';
+        + '<div class="li-row">・設定結帳日，帳單頁顯示當期消費累計</div>'
+        + '<div class="li-row">・留空＝不預估該銀行</div>'
+        + '<div class="li-row">・名單來自已有消費紀錄的帳戶；未支援同步的銀行可手動記帳後啟用</div>'
+        + '<div class="li-row" style="color:#e57373;">・僅供參考，實際以銀行帳單為準</div></div>';
       if (estBanks.length) {
         for (const b of estBanks) {
           const v = (prefs.closingDays && prefs.closingDays[b]) || '';
@@ -1155,9 +1157,9 @@
 
       let html = '<div class="bank-setting">';
       html += '<div class="info-banner">'
-        + '・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。<br>'
-        + '・輸入<b>目前正確的餘額</b>作為起始金額。<br>'
-        + '・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。'
+        + '<div class="li-row">・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。</div>'
+        + '<div class="li-row">・輸入<b>目前正確的餘額</b>作為起始金額。</div>'
+        + '<div class="li-row">・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。</div>'
         + '</div>';
       // 銀行 chips
       html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
