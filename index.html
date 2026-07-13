@@ -452,7 +452,7 @@
     }
 
     // 偏好（總覽顏色 / emoji / 帳單預估）
-    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋', billEstimate:false, closingDays:{} };
+    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋', billEstimate:false, closingDays:{}, estDismissed:{} };
     let prefs = { ...DEFAULT_PREFS };
     async function loadPrefs() {
       if (!spreadsheetId) return;
@@ -1715,7 +1715,7 @@
     }
 
     // ===== 帳單頁 =====
-    // 依結帳日算「當期」區間：上次結帳日隔天 ～ 下次結帳日（含當天）。
+    // 依結帳日算「當期」與「上期」區間。當期：上次結帳日隔天 ～ 下次結帳日（含當天）。
     // 結帳日超過當月天數時取月底（如設 31 遇 2 月 → 2/28-29）。回傳 YYYY-MM-DD 字串供與消費日期字串比較。
     function closingPeriodFor(day) {
       const dim = (y,m) => new Date(y, m+1, 0).getDate(); // m 為 0-based
@@ -1728,7 +1728,16 @@
       let py = cy, pm = cm - 1; if (pm < 0) { pm = 11; py -= 1; }
       const prevClosing = new Date(py, pm, Math.min(day, dim(py, pm)));
       const start = new Date(prevClosing.getTime() + 86400000);
-      return { start: f(start), end: f(closing) };
+      // 上上期結帳日（＝上期起點的前一天）
+      let qy = py, qm = pm - 1; if (qm < 0) { qm = 11; qy -= 1; }
+      const prevPrevClosing = new Date(qy, qm, Math.min(day, dim(qy, qm)));
+      const prevStart = new Date(prevPrevClosing.getTime() + 86400000);
+      return { start: f(start), end: f(closing), prevStart: f(prevStart), prevEnd: f(prevClosing) };
+    }
+    function sumBankPeriod(bank, start, end) {
+      return expensesData.filter(e => e.bank === bank && !e.excluded && e.amount > 0
+        && e.date >= start && e.date <= end)
+        .reduce((s,e) => s + e.amount, 0);
     }
     function renderBillEstimates() {
       if (!prefs.billEstimate || !prefs.closingDays) return '';
@@ -1737,9 +1746,23 @@
       let cards = '';
       for (const bank of banks) {
         const period = closingPeriodFor(prefs.closingDays[bank]);
-        const sum = expensesData.filter(e => e.bank === bank && !e.excluded && e.amount > 0
-          && e.date >= period.start && e.date <= period.end)
-          .reduce((s,e) => s + e.amount, 0);
+        // 上期卡：結帳後、真帳單到達前的空窗期顯示「上期已結帳金額」。退場條件三選一（先到先贏）：
+        // 1) 該行已同步到截止日晚於上期結帳日的真帳單（自動接棒） 2) 使用者手動關閉（記住該期，下期會出新的）
+        // 3) 到下一個結帳日自然過期（本卡只算上一期，不依賴帳單同步——沒開帳單同步的人靠 2、3 退場）
+        const prevSum = sumBankPeriod(bank, period.prevStart, period.prevEnd);
+        const billArrived = billsData.some(b => b.bank === bank && b.due_date && b.due_date > period.prevEnd);
+        const dismissed = prefs.estDismissed && prefs.estDismissed[bank] === period.prevEnd;
+        if (prevSum > 0 && !billArrived && !dismissed) {
+          const prevEndStr = period.prevEnd.slice(5).replace('-','/');
+          cards += '<div class="bill-card" style="border-left:4px solid #b0bec5;opacity:0.85;position:relative;">'
+            + '<button class="est-dismiss" data-bank="' + esc(bank) + '" data-period="' + period.prevEnd + '" style="position:absolute;top:8px;right:10px;border:none;background:none;color:#b0bec5;font-size:16px;cursor:pointer;padding:2px 6px;">✕</button>'
+            + '<div class="bill-card-top"><div>'
+            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
+            + '<div class="bill-due" style="color:#b0bec5;">' + prevEndStr + ' 已結帳 · 帳單寄送中</div>'
+            + '</div><div style="padding-right:18px;"><div class="bill-amount" style="color:#78909c;">$' + fmt(prevSum) + '</div><div class="bill-tag">上期預估</div></div></div>'
+            + '</div>';
+        }
+        const sum = sumBankPeriod(bank, period.start, period.end);
         const endStr = period.end.slice(5).replace('-','/');
         cards += '<div class="bill-card" style="border-left:4px solid #90a4ae;opacity:0.92;">'
           + '<div class="bill-card-top"><div>'
@@ -1789,6 +1812,12 @@
 
       setContent(html);
       document.querySelectorAll('.btn-paid').forEach(btn => { btn.onclick = () => openPayDialog(btn.dataset.key); });
+      document.querySelectorAll('.est-dismiss').forEach(btn => { btn.onclick = async () => {
+        if (!prefs.estDismissed) prefs.estDismissed = {};
+        prefs.estDismissed[btn.dataset.bank] = btn.dataset.period;
+        await savePrefs();
+        renderBills();
+      }; });
       const toggle = document.getElementById('togglePaid');
       if (toggle) toggle.onclick = () => { showOlderPaid = !showOlderPaid; renderBills(); };
     }
