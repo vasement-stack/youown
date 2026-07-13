@@ -2091,7 +2091,9 @@
     let invShowMatched = false, invShowIgnored = false, invShowUnmatched = true, invExpandedId = null, invNearbyExp = [];
     function renderInvoices() {
       if (!invoicesData.length) {
-        setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步</div>');
+        setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步<br>或匯入從財政部平台下載的發票 CSV<br><br><button id="importInvBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">匯入發票 CSV</button></div>');
+        const eb = document.getElementById('importInvBtn');
+        if (eb) eb.onclick = () => pickInvoiceCsv(eb);
         return;
       }
       const catMatch = (i) => !invCatFilter || (i.category || '待分類') === invCatFilter;
@@ -2101,7 +2103,9 @@
 
       let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
         + '<div class="inv-stat">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>'
-        + '<button id="rematchBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">重新匹配</button></div>';
+        + '<div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<button id="importInvBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;">匯入</button>'
+        + '<button id="rematchBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;">重新匹配</button></div></div>';
       // 分類篩選標籤列
       const invCats = ['', ...allCategories()];
       html += '<div class="cat-filter-row">' + invCats.map(c =>
@@ -2249,6 +2253,8 @@
       document.querySelectorAll('.inv-rule-trigger').forEach(el => {
         el.onclick = (ev) => { ev.stopPropagation(); showAddRulePanel(el.dataset.store, el.dataset.inv); };
       });
+      const impBtn = document.getElementById('importInvBtn');
+      if (impBtn) impBtn.onclick = () => pickInvoiceCsv(impBtn);
       const rmBtn = document.getElementById('rematchBtn');
       if (rmBtn) rmBtn.onclick = async () => {
         rmBtn.disabled = true; rmBtn.textContent = '匹配中...';
@@ -2490,8 +2496,9 @@
     async function syncTaishinAtmWithdrawals(dateFilter, existingTrIds) {
       const rows = [];
       const [setupMsgs, resultMsgs] = await Promise.all([
-        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
-        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
+        // 寄件人用網域比對（Gmail from: 為子字串匹配）：台新通知信有 webmaster@ 與 bhurecv 子網域等變體，寫死完整地址會漏抓
+        gmailSearch('from:taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
+        gmailSearch('from:taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
       ]);
       const setups = [];
       for (const msg of setupMsgs) {
@@ -2505,8 +2512,10 @@
         const r = parseTaishinResult(extractBody(md.payload));
         if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
         // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
+        // 日期直接用原始斜線格式解析（YYYY/MM/DD HH:mm:ss 各瀏覽器皆支援；改成 dash+空格 Safari 會回 Invalid Date 導致排序失效）
+        const rt = new Date(r.time).getTime();
         const match = setups.filter(s => s.account === r.account)
-          .sort((a,b) => Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(a.time.replace(/\//g,'-'))) - Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(b.time.replace(/\//g,'-'))))[0];
+          .sort((a,b) => Math.abs(rt - new Date(a.time).getTime()) - Math.abs(rt - new Date(b.time).getTime()))[0];
         if (!match) continue; // 找不到對應金額，無法記錄
         const dateStr = r.time.slice(0,10).replace(/\//g,'-');
         rows.push([dateStr,'台新','提款','','',match.amount,'taishin_atm_'+msg.id]);
@@ -2543,6 +2552,146 @@
         inv.detail = inv.store + '/' + inv.invoice_no + '：' + inv.items.map(it => it.name + '(' + it.amount + ')').join(' | ');
       }
       return results;
+    }
+
+    // ===== 財政部平台「自行下載」CSV（逗號分隔＋標題列，一列一品項，發票號碼重複多列）=====
+    function splitCsvLine(line) {
+      const out = []; let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQ) {
+          if (ch === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else inQ = false; }
+          else cur += ch;
+        } else {
+          if (ch === '"') inQ = true;
+          else if (ch === ',') { out.push(cur); cur = ''; }
+          else cur += ch;
+        }
+      }
+      out.push(cur);
+      return out;
+    }
+    function csvNum(v) { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').trim()); return isNaN(n) ? 0 : n; }
+    function parseInvoiceTableCsv(text) {
+      const lines = text.replace(/\uFEFF/g, '').split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) return [];
+      const header = splitCsvLine(lines[0]);
+      const col = (kw) => header.findIndex(h => h.indexOf(kw) > -1);
+      const iNo = col('發票號碼'), iDate = col('發票日期'), iStatus = col('發票狀態');
+      const iStore = col('賣方名稱'), iTax = col('賣方統一編號'), iCarrier = col('載具');
+      const iItemAmt = col('消費明細_金額'), iItemName = col('消費明細_品名'), iAmt = col('發票金額');
+      if (iNo < 0 || iDate < 0) return [];
+      const map = {}, order = [], voided = {};
+      for (let li = 1; li < lines.length; li++) {
+        const c = splitCsvLine(lines[li]);
+        const no = (c[iNo] || '').trim();
+        if (!no || voided[no]) continue;
+        if (iStatus > -1 && (c[iStatus] || '').indexOf('作廢') > -1) { voided[no] = true; delete map[no]; continue; }
+        let inv = map[no];
+        if (!inv) {
+          const raw = (c[iDate] || '').replace(/\D/g, '');
+          let date = '';
+          if (raw.length === 8) date = raw.slice(0,4) + '-' + raw.slice(4,6) + '-' + raw.slice(6,8);
+          else if (raw.length === 7) date = (parseInt(raw.slice(0,3), 10) + 1911) + '-' + raw.slice(3,5) + '-' + raw.slice(5,7); // 民國年
+          if (!date) continue;
+          inv = map[no] = {
+            date, store: iStore > -1 ? (c[iStore] || '') : '', amount: iAmt > -1 ? csvNum(c[iAmt]) : 0,
+            invoice_no: no, carrier: iCarrier > -1 ? (c[iCarrier] || '') : '', tax_id: iTax > -1 ? (c[iTax] || '') : '',
+            items: [], _sum: 0, _hasItemAmt: false
+          };
+          order.push(inv);
+        }
+        const itemAmt = iItemAmt > -1 ? csvNum(c[iItemAmt]) : 0;
+        if (iItemAmt > -1 && (c[iItemAmt] || '').trim() !== '') { inv._sum += itemAmt; inv._hasItemAmt = true; }
+        if (iItemName > -1 && (c[iItemName] || '').trim()) inv.items.push({ name: (c[iItemName] || '').trim(), amount: itemAmt });
+      }
+      const results = order.filter(inv => !voided[inv.invoice_no]);
+      for (const inv of results) {
+        if (inv._hasItemAmt) inv.amount = Math.round(inv._sum * 100) / 100; // 每列金額是品項金額，總額用加總（含負數折扣列）
+        delete inv._sum; delete inv._hasItemAmt;
+        inv.detail = inv.store + '/' + inv.invoice_no + '：' + inv.items.map(it => it.name + '(' + it.amount + ')').join(' | ');
+      }
+      return results;
+    }
+    // 自動判斷格式：M|D 直線分隔（每月彙整信）或標題列逗號分隔（平台自行下載）
+    function parseAnyInvoiceCsv(text) {
+      const first = (text.replace(/\uFEFF/g, '').split(/\r?\n/).find(l => l.trim()) || '');
+      return first.indexOf('|') > -1 ? parseInvoiceCsv(text) : parseInvoiceTableCsv(text);
+    }
+
+    // ===== 發票匯入共用邏輯（信件同步 & 手動上傳共用）：去重 → 套規則 → 自動比對消費 → 寫入 =====
+    async function importParsedInvoices(parsedInvoices) {
+      await ensureInvoicesSheet();
+      await ensureCategoriesSheet();
+      await loadCategoryRules();
+      const existingInvNos = await getExistingInvoiceNos();
+      const seen = {}, fresh = [];
+      for (const inv of parsedInvoices) {
+        if (!inv.invoice_no || existingInvNos.has(inv.invoice_no) || seen[inv.invoice_no]) continue;
+        seen[inv.invoice_no] = true;
+        fresh.push(inv);
+      }
+      if (!fresh.length) return { added: 0, skipped: parsedInvoices.length };
+      // 讀所有消費做自動比對（金額+日期完全一致，一筆消費只配一次）
+      const allExp = await loadExpenses();
+      const availExp = allExp.filter(e => e.status !== '已匹配');
+      const invRows = [], expUpdates = [];
+      for (const inv of fresh) {
+        const cat = categoryForStore(inv.store) || '';
+        const mi = availExp.findIndex(e => Number(e.amount) === Number(inv.amount) && e.date === inv.date);
+        if (mi > -1) {
+          const match = availExp.splice(mi, 1)[0];
+          invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '已匹配', match.gmail_id, inv.detail]);
+          // 消費：套分類（只在待分類時）、明細、已匹配
+          expUpdates.push({ row: match.row, category: (cat && match.category === '待分類') ? cat : match.category, detail: inv.detail });
+        } else {
+          invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '未匹配', '', inv.detail]);
+        }
+      }
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:invRows})});
+      if (expUpdates.length) {
+        const data = [];
+        for (const u of expUpdates) {
+          data.push({ range: 'expenses!F'+u.row, values: [[u.category]] });
+          data.push({ range: 'expenses!G'+u.row, values: [['已匹配']] });
+          data.push({ range: 'expenses!H'+u.row, values: [[u.detail]] });
+        }
+        for (let i = 0; i < data.length; i += 100) {
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(i,i+100)})});
+        }
+      }
+      return { added: invRows.length, skipped: parsedInvoices.length - fresh.length };
+    }
+
+    // ===== 手動上傳發票 CSV（給沒設定每月彙整信的用戶）=====
+    function pickInvoiceCsv(btn) {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.csv,text/csv';
+      input.onchange = async () => {
+        const f = input.files && input.files[0];
+        if (!f) return;
+        const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = '匯入中...';
+        try { await handleInvoiceCsvFile(f); }
+        catch (err) { showToast('匯入失敗：' + (err && err.message ? err.message : '請再試一次')); }
+        if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = orig; }
+      };
+      input.click();
+    }
+    async function handleInvoiceCsvFile(file) {
+      const buf = await file.arrayBuffer();
+      let text = new TextDecoder('utf-8').decode(buf);
+      if (text.indexOf('\uFFFD') > -1) { try { text = new TextDecoder('big5').decode(buf); } catch (e) {} } // 舊版下載檔可能是 Big5
+      const parsed = parseAnyInvoiceCsv(text);
+      if (!parsed.length) { showToast('無法解析此檔案，請確認是財政部電子發票 CSV'); return; }
+      const r = await importParsedInvoices(parsed);
+      // 刷新快取與記憶體
+      const [freshExp, freshInv] = await Promise.all([loadExpenses(), loadInvoices()]);
+      writeCache('expenses', freshExp); writeCache('invoices', freshInv);
+      expensesData = freshExp; invoicesData = freshInv;
+      showToast(r.added ? ('匯入完成：新增 ' + r.added + ' 張發票' + (r.skipped ? '，略過 ' + r.skipped + ' 張已存在' : '')) : ('沒有新發票（' + r.skipped + ' 張已存在）'));
+      renderInvoices();
     }
 
     const ACCOUNT_SOURCES = [
@@ -2583,22 +2732,16 @@
 
       try {
         const lastSync = await getLastSync();
-        let dateFilter, invoiceDateFilter, syncStart; // syncStart：發票以「資料日期」過濾的下限（YYYY-MM-DD）
+        let dateFilter, invoiceDateFilter;
         if (lastSync) {
           dateFilter = 'after:' + lastSync;
           invoiceDateFilter = 'after:' + lastSync;
-          syncStart = await getSavedSyncStartDate(); // 可能為 null（舊用戶沒存過）→ 不過濾
         } else {
           // 首次同步：用用戶自選的起始日期（若沒選過則先跳選擇框，見 doSync 呼叫處）
           const startDate = await getSyncStartDate(); // 格式 YYYY-MM-DD
-          syncStart = startDate;
           const [y,m,d] = startDate.split('-');
           dateFilter = 'after:' + y + '/' + parseInt(m) + '/' + parseInt(d);
-          invoiceDateFilter = dateFilter; // 發票信照同一天開始搜（彙整信必晚於發票日期，不會漏）
-          // 語意：起始日＝「我要這天以後的資料」。發票另以 inv.date >= syncStart 過濾，
-          // 避免起始日後收到的彙整信把上一期（起始日前）的發票帶進來變成配不到的未匹配發票。
-          // 消費/轉帳通知信≈交易當天寄達，信件日即資料日，不需另過濾；
-          // 帳單刻意「不」用資料日期過濾：起始日後收到的帳單就是要繳的帳單（即使帳期涵蓋起始日前的消費）。
+          invoiceDateFilter = dateFilter; // 發票也從同一天開始找（雙月信件會自然涵蓋前一期）
         }
 
         // ---- 消費 ----
@@ -2691,12 +2834,6 @@
         // ---- 發票 ----
         if (syncOptions['發票'] && syncOptions['發票'].enabled) {
           syncBtn.textContent = '同步發票...';
-          await ensureInvoicesSheet();
-          await ensureCategoriesSheet();
-          await loadCategoryRules();
-          const existingInvNos = await getExistingInvoiceNos();
-          const invRows = [];
-          const seenInv = {};
           const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + invoiceDateFilter);
           const parsedInvoices = [];
           for (const msg of msgs) {
@@ -2705,52 +2842,12 @@
             const attData = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msg.id+'/attachments/'+att.id,{headers:{'Authorization':'Bearer '+accessToken}})).json();
             try {
               const csvText = decodeBase64Url(attData.data);
-              parseInvoiceCsv(csvText).forEach(inv => {
-                // 用發票本身的日期過濾（syncStart 為 A7 起始日，不能用 lastSync——彙整信帶的是上個月的發票，會整批誤殺）
-                if (syncStart && inv.date < syncStart) return;
-                if (inv.invoice_no && !existingInvNos.has(inv.invoice_no) && !seenInv[inv.invoice_no]) {
-                  seenInv[inv.invoice_no] = true;
-                  parsedInvoices.push(inv);
-                }
-              });
+              parsedInvoices.push(...parseInvoiceCsv(csvText));
             } catch(e){}
           }
           if (parsedInvoices.length) {
-            // 讀所有消費做自動比對（金額+日期完全一致）
-            const allExp = await loadExpenses();
-            const availExp = allExp.filter(e => e.status !== '已匹配'); // 未匹配的消費才能配
-            const expUpdates = []; // 消費要更新：{row, category, detail, invoice_no}
-            for (const inv of parsedInvoices) {
-              const cat = categoryForStore(inv.store) || '';
-              // 找金額+日期一致的未匹配消費
-              const mi = availExp.findIndex(e => Number(e.amount) === Number(inv.amount) && e.date === inv.date);
-              if (mi > -1) {
-                const match = availExp[mi];
-                availExp.splice(mi, 1); // 一筆消費只配一次
-                // 發票：已匹配
-                invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '已匹配', match.gmail_id, inv.detail]);
-                // 消費：套分類（只在待分類時）、明細、發票號碼、已匹配
-                expUpdates.push({ row: match.row, category: (cat && match.category==='待分類') ? cat : match.category, detail: inv.detail, invoice_no: inv.invoice_no });
-              } else {
-                // 沒配到 → 未匹配
-                invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '未匹配', '', inv.detail]);
-              }
-            }
-            // 寫發票
-            await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:invRows})});
-            invAdded = invRows.length;
-            // 更新配對到的消費（F分類 G狀態 H明細，加 invoice_no 存哪？消費目前欄位 F=分類 G=狀態 H=發票明細 I=來源 J=排除，發票號碼併進明細或另存）
-            if (expUpdates.length) {
-              const data = [];
-              for (const u of expUpdates) {
-                data.push({ range: 'expenses!F'+u.row, values: [[u.category]] });
-                data.push({ range: 'expenses!G'+u.row, values: [['已匹配']] });
-                data.push({ range: 'expenses!H'+u.row, values: [[u.detail]] });
-              }
-              for (let i=0;i<data.length;i+=100) {
-                await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(i,i+100)})});
-              }
-            }
+            // 去重＋套規則＋自動比對＋寫入（與手動上傳 CSV 共用 importParsedInvoices）
+            invAdded = (await importParsedInvoices(parsedInvoices)).added;
           }
         }
 
