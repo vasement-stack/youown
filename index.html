@@ -7,7 +7,6 @@
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#00897b" />
   <link rel="apple-touch-icon" href="icon-192.png" />
-  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="YouOwn" />
@@ -71,8 +70,6 @@
     .bank-block .pw-label { font-size: 12px; color: #9aa; margin-bottom: 5px; }
     .info-banner { background: #e8f5f3; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #456; line-height: 1.7; }
     .info-banner b { color: #00897b; }
-    /* 條列說明：第二行對齊文字而非頂到最左（懸掛縮排） */
-    .li-row { padding-left: 1em; text-indent: -1em; }
     /* 帳單頁 */
     .bill-section-title { font-size: 13px; font-weight: 600; margin: 4px 0 10px; padding-left: 4px; }
     .bill-card { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 4px 16px rgba(0,60,50,0.06); margin-bottom: 12px; }
@@ -665,7 +662,7 @@
           </div>
         </div>
         <div class="setting-section">
-          <div class="info-banner" style="margin:0;"><b>隱私說明</b><div class="li-row">・所有財務資料都儲存在你的 Google 帳號。</div><div class="li-row">・我們不會儲存或查看你的財務資料。</div><div class="li-row">・裝置僅暫存快取，登出後自動清除。</div><div class="li-row">・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div></div>
+          <div class="info-banner" style="margin:0;"><b>隱私說明</b><br>・所有財務資料都儲存在你的 Google 帳號。<br>・我們不會儲存或查看你的財務資料。<br>・裝置僅暫存快取，登出後自動清除。<br>・PDF 密碼預設僅暫存，關閉 App 即清除；若開啟「記住密碼」則加存於此裝置，登出時清除。</div>
         </div>
         <p style="text-align:center;color:#bbc;font-size:12px;padding:8px 0 20px;">YouOwn · 你的資料都在自己手上</p>
       `;
@@ -693,14 +690,14 @@
     function renderBankSetting() {
       let html = '<div class="bank-setting">';
       // 資料來源說明
-      html += '<div class="info-banner"><b>目前已支援同步</b>'
-        + '<div class="li-row">・Gmail 銀行通知信自動記帳（需收到 Email 通知）</div>'
-        + '<div class="li-row">・信用卡消費通知</div>'
-        + '<div class="li-row">・同一銀行多張信用卡合併顯示</div>'
-        + '<div class="li-row">・台新提款通知（目前僅支援無卡提款）</div>'
-        + '<div class="li-row">・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識</div>'
-        + '<div class="li-row">・現金與未收到 Email 通知的交易請手動新增</div>'
-        + '<div class="li-row">・其他銀行、卡片類型與更多功能陸續開發中</div></div>';
+      html += '<div class="info-banner"><b>目前已支援同步</b><br>'
+        + '・Gmail 銀行通知信自動記帳（需收到 Email 通知）<br>'
+        + '・信用卡消費通知<br>'
+        + '・同一銀行多張信用卡合併顯示<br>'
+        + '・台新提款通知（目前僅支援無卡提款）<br>'
+        + '・銀行通知信箱請直接設為此 Gmail，手動轉寄的信件無法辨識<br>'
+        + '・現金與未收到 Email 通知的交易請手動新增<br>'
+        + '・其他銀行、卡片類型與更多功能陸續開發中</div>';
       // 記住密碼開關（取代原本的密碼說明）
       html += '<div style="display:flex;justify-content:space-between;align-items:center;background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:12px;">'
         + '<div><div style="font-size:14px;font-weight:600;">記住 PDF 密碼</div>'
@@ -1133,6 +1130,7 @@
       document.getElementById('settingsView').style.display = 'block';
     };
     let pendingBalances = {}; // 資產設定頁暫存的餘額輸入
+    let showMoreBanks = false; // 資產設定頁：是否展開「更多銀行」（不可同步的）
     function collectBalInputs() {
       document.querySelectorAll('.bal-input').forEach(inp => {
         if (inp.value !== '') pendingBalances[inp.dataset.bank] = inp.value;
@@ -1141,6 +1139,7 @@
     }
     function openMyBanksSetting() {
       pendingBalances = {};
+      showMoreBanks = false;
       document.getElementById('settingsView').style.display = 'none';
       document.getElementById('myBanksView').style.display = 'block';
       renderMyBanksSetting();
@@ -1148,8 +1147,8 @@
     async function renderMyBanksSetting() {
       const current = new Set(myBanks || []);
       const syncable = new Set(BANKS_SUPPORT.map(b => b.name));
-      // 自訂帳戶（myBanks 中不在 TW_BANKS 的）
-      const customs = [...current].filter(b => !TW_BANKS.includes(b));
+      // 自訂帳戶（myBanks 中不在 TW_BANKS 的；現金已固定在 primary，不重複列出）
+      const customs = [...current].filter(b => !TW_BANKS.includes(b) && b !== '現金');
       // 讀現有餘額（預填）
       const accts = await getAccountsData();
       const balMap = {};
@@ -1158,17 +1157,33 @@
       let html = '<div class="bank-setting">';
       html += '<div class="info-banner">'
         + '<div class="li-row">・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。</div>'
+        + '<div class="li-row">・沒有 ⚡ 的帳戶不會自動同步，但一樣可以手動記帳、隨時校正餘額。</div>'
         + '<div class="li-row">・輸入<b>目前正確的餘額</b>作為起始金額。</div>'
         + '<div class="li-row">・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。</div>'
         + '</div>';
-      // 銀行 chips
-      html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
-      for (const b of [...TW_BANKS, ...customs]) {
+      // 銀行 chips：可同步的（+現金）優先顯示，其餘收在「更多銀行」後面，避免首屏被 30 家淹沒
+      const primary = [...TW_BANKS.filter(b => syncable.has(b)), '現金'];
+      const others = TW_BANKS.filter(b => !syncable.has(b) && b !== '現金');
+      // 已勾選但屬於「更多」區的，展開區預設打開，免得看起來像消失了
+      const hasSelectedInOthers = others.some(b => current.has(b));
+      const showOthers = showMoreBanks || hasSelectedInOthers;
+      const chip = (b) => {
         const on = current.has(b);
         const canSync = syncable.has(b);
-        html += '<button class="mybank-chip" data-bank="' + esc(b) + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + esc(b) + (canSync?' ⚡':'') + '</button>';
-      }
+        return '<button class="mybank-chip" data-bank="' + esc(b) + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + esc(b) + (canSync?' ⚡':'') + '</button>';
+      };
+      html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      html += [...primary, ...customs].map(chip).join('');
       html += '</div>';
+      // 已勾選「更多」區銀行時該區固定展開（收起會讓已選項目看似消失），此時不顯示收合按鈕
+      if (!hasSelectedInOthers) {
+        html += '<button id="toggleMoreBanks" style="width:100%;margin-top:10px;background:none;border:1px dashed #dde8e5;color:#7a8a87;border-radius:10px;padding:9px;font-size:13px;cursor:pointer;">'
+          + (showOthers ? '收起其他銀行 ▲' : '更多銀行（' + others.length + '）▼') + '</button>';
+      }
+      if (showOthers) {
+        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' + others.map(chip).join('') + '</div>'
+          + '<div style="font-size:11px;color:#bbc;margin-top:8px;">這些銀行目前無法自動同步，需要手動記帳。</div>';
+      }
       // 自訂新增
       html += '<div style="display:flex;gap:8px;margin-top:12px;">'
         + '<input id="customBankInput" class="pw-input" placeholder="自訂帳戶（如 股票、悠遊卡）" style="flex:1;margin:0;" />'
@@ -1199,6 +1214,12 @@
       html += '</div>';
       document.getElementById('myBanksContent').innerHTML = html;
 
+      const moreBtn = document.getElementById('toggleMoreBanks');
+      if (moreBtn) moreBtn.onclick = () => {
+        collectBalInputs();
+        showMoreBanks = !showMoreBanks;
+        renderMyBanksSetting();
+      };
       document.querySelectorAll('.mybank-chip').forEach(chip => {
         chip.onclick = () => {
           collectBalInputs();
@@ -1767,13 +1788,16 @@
             + '</div>';
         }
         const sum = sumBankPeriod(bank, period.start, period.end);
-        const endStr = period.end.slice(5).replace('-','/');
-        cards += '<div class="bill-card" style="border-left:4px solid #90a4ae;opacity:0.92;">'
-          + '<div class="bill-card-top"><div>'
-          + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
-          + '<div class="bill-due" style="color:#90a4ae;">' + endStr + ' 結帳 · 本期累計</div>'
-          + '</div><div><div class="bill-amount" style="color:#607d8b;">$' + fmt(sum) + '</div><div class="bill-tag">預估</div></div></div>'
-          + '</div>';
+        // 本期累計 $0 不顯示：可能是這期沒刷（無資訊價值），也可能是該行消費根本沒同步來源（顯示 $0 會誤導）
+        if (sum > 0) {
+          const endStr = period.end.slice(5).replace('-','/');
+          cards += '<div class="bill-card" style="border-left:4px solid #90a4ae;opacity:0.92;">'
+            + '<div class="bill-card-top"><div>'
+            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
+            + '<div class="bill-due" style="color:#90a4ae;">' + endStr + ' 結帳 · 本期累計</div>'
+            + '</div><div><div class="bill-amount" style="color:#607d8b;">$' + fmt(sum) + '</div><div class="bill-tag">預估</div></div></div>'
+            + '</div>';
+        }
       }
       if (!cards) return '';
       return '<div class="bill-section-title" style="color:#90a4ae;">📊 本期預估</div>' + cards
@@ -1812,7 +1836,7 @@
         if (showOlderPaid) html += older.map(renderPaidRow).join('');
         if (older.length) html += '<div class="show-more" id="togglePaid">' + (showOlderPaid ? '收起' : '顯示更多（' + older.length + ' 筆）') + '</div>';
       }
-      if (!pending.length && !paid.length) html += '<div class="empty">還沒有帳單<br>按右上角「同步」抓取</div>';
+      if (!pending.length && !paid.length) html = '<div class="empty">還沒有帳單<br>按右上角「同步」抓取</div>';
 
       setContent(html);
       document.querySelectorAll('.btn-paid').forEach(btn => { btn.onclick = () => openPayDialog(btn.dataset.key); });
