@@ -655,6 +655,21 @@
           </div>
         </div>
         <div class="setting-section">
+          <h2>關於</h2>
+          <div class="setting-card">
+            <div class="setting-item" onclick="openAbout()">
+              <div><div class="label">關於 YouOwn</div><div class="sub">為什麼會有這個 App</div></div>
+              <span class="arrow">›</span>
+            </div>
+            <!-- === 綠界贊助（iOS App 版需整段移除，改用 IAP；不可用 runtime 隱藏，須實際刪除避免 Apple 審查抓到外部付款）=== -->
+            <div class="setting-item" onclick="openDonate()">
+              <div><div class="label">請我喝杯咖啡 ☕</div><div class="sub">YouOwn 目前沒有收費計畫，你的支持是動力</div></div>
+              <span class="arrow">›</span>
+            </div>
+            <!-- === 綠界贊助結束 === -->
+          </div>
+        </div>
+        <div class="setting-section">
           <div class="setting-card">
             <div class="setting-item danger" onclick="doLogout()">
               <div class="label">登出</div>
@@ -676,6 +691,47 @@
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
     }
+
+    // 關於 YouOwn（開發者敘事，動態覆蓋層）
+    function openAbout() {
+      const overlay = document.createElement('div');
+      overlay.className = 'qa-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = '<div class="qa-panel">'
+        + '<div style="text-align:center;font-size:19px;font-weight:700;margin-bottom:18px;">關於 YouOwn</div>'
+        + '<div style="font-size:14px;color:#3a4a47;line-height:1.85;">'
+        + '<p style="margin:0 0 14px;">我是一個獨立開發者。做 YouOwn 之前，我跟很多人一樣用市面上的記帳 App，但總覺得哪裡不對——想用自動同步，就得把銀行帳密交給對方；想用完整功能，又常常要每個月付費。</p>'
+        + '<p style="margin:0 0 14px;">我不太想把自己的銀行帳密交給一個不知道會怎麼保管的服務，也不想為了記帳綁一份訂閱。所以我乾脆自己做一個來用。</p>'
+        + '<p style="margin:0 0 14px;">YouOwn 的做法不一樣：它不碰你的銀行帳密，而是讀你自己 Gmail 裡的銀行通知信；你的財務資料只存在你自己的 Google，我這邊看不到、也不留存。</p>'
+        + '<p style="margin:0 0 14px;">這個 App 是我自己每天在用的工具。如果它剛好也幫上了你，那就太好了。</p>'
+        + '<p style="margin:0;text-align:right;color:#7a8a87;">— YouOwn 開發者</p>'
+        + '</div>'
+        + '<button id="aboutClose" style="width:100%;margin-top:20px;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;">關閉</button>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('aboutClose').onclick = () => overlay.remove();
+    }
+
+    // === 綠界贊助（iOS App 版需整段移除，改用 IAP；不可 runtime 隱藏，須實際刪除）===
+    function openDonate() {
+      const overlay = document.createElement('div');
+      overlay.className = 'qa-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = '<div class="qa-panel">'
+        + '<div style="text-align:center;font-size:40px;margin-bottom:8px;">☕</div>'
+        + '<div style="text-align:center;font-size:19px;font-weight:700;margin-bottom:10px;">請我喝杯咖啡</div>'
+        + '<div style="text-align:center;font-size:14px;color:#7a8a87;line-height:1.7;margin-bottom:20px;">YouOwn 目前沒有收費計畫。<br>如果它有幫上你，也歡迎請我喝杯咖啡，金額不限，你的支持是我維護下去的動力 🙏</div>'
+        + '<button id="donateGo" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">前往贊助</button>'
+        + '<button id="donateClose" style="width:100%;background:none;color:#99a;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;">下次再說</button>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('donateGo').onclick = () => {
+        window.open('https://payment.ecpay.com.tw/Broadcaster/Donate/1D5CCC9588FEE268BA4928C0A7C7704C', '_blank', 'noopener,noreferrer');
+        overlay.remove();
+      };
+      document.getElementById('donateClose').onclick = () => overlay.remove();
+    }
+    // === 綠界贊助結束 ===
 
     // ===== 銀行設定子頁 =====
     document.getElementById('bankBackBtn').onclick = () => {
@@ -3221,9 +3277,34 @@
     let onboardingNeeds = null;
     function showOnboarding() {
       const needs = { bill: false, expense: false, invoice: false, asset: false };
+      let step = 'intro'; // intro（說明頁）→ needs（選需求）
       const overlay = document.createElement('div');
       overlay.className = 'qa-overlay';
       document.body.appendChild(overlay);
+
+      // 說明頁：先讓使用者知道「這是什麼、能得到什麼」，再進四選項（四點對應後面四選項，看完就懂怎麼選）
+      function renderIntro() {
+        const feat = (icon, title, desc) =>
+          '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:14px;">'
+          + '<div style="font-size:22px;line-height:1.3;flex-shrink:0;">' + icon + '</div>'
+          + '<div><div style="font-size:14px;font-weight:600;">' + title + '</div>'
+          + '<div style="font-size:12px;color:#8a9a97;margin-top:2px;line-height:1.5;">' + desc + '</div></div></div>';
+        overlay.innerHTML = '<div class="qa-panel">'
+          + '<div style="text-align:center;font-size:40px;margin-bottom:6px;">👋</div>'
+          + '<div style="text-align:center;font-size:21px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
+          + '<div style="text-align:center;font-size:13px;color:#7a8a87;margin-bottom:20px;line-height:1.6;">把你的帳戶、帳單、消費一次看清。<br>資料只存在你自己的 Google，我們看不到，也不用你的銀行帳密。</div>'
+          + '<div style="font-size:13px;font-weight:600;color:#8a9a97;margin-bottom:12px;">YouOwn 可以幫你：</div>'
+          + feat('💳', '追蹤信用卡帳單', '帳單直接從 Email 抓取，繳款期限不再漏掉')
+          + feat('🧾', '自動記錄消費', '信用卡消費通知進來自動記帳，也能手動補記')
+          + feat('📄', '發票對上消費', '電子發票明細自動比對消費，看清每筆花在哪')
+          + feat('🏦', '掌握資產餘額', '各帳戶餘額一起看，轉帳、扣款自動更新')
+          + '<div style="font-size:11px;color:#bbc;margin:6px 0 16px;line-height:1.6;">＊自動同步需要你的銀行有寄 Email 通知；沒有通知的也都能手動記帳。</div>'
+          + '<div class="qa-btns"><button id="introSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
+          + '<button id="introNext" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">開始設定</button></div>'
+          + '</div>';
+        document.getElementById('introSkip').onclick = () => overlay.remove();
+        document.getElementById('introNext').onclick = () => { step = 'needs'; renderOb(); };
+      }
 
       function renderOb() {
         const opt = (key, title, sub) =>
@@ -3232,10 +3313,10 @@
           + '<div style="font-size:15px;font-weight:600;">' + (needs[key] ? '✓ ' : '') + title + '</div>'
           + '<div style="font-size:12px;color:#8a9a97;margin-top:3px;">' + sub + '</div></button>';
         overlay.innerHTML = '<div class="qa-panel">'
-          + '<div style="text-align:center;font-size:40px;margin-bottom:8px;">👋</div>'
-          + '<div style="text-align:center;font-size:20px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
-          + '<div style="text-align:center;font-size:13px;color:#7a8a87;margin-bottom:18px;">你的財務資料只存在你自己的 Google，不經過我們。</div>'
-          + '<div style="font-size:14px;font-weight:600;margin-bottom:10px;">你想使用哪些功能？（可複選）</div>'
+          + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+          + '<button id="obBack" style="border:none;background:none;color:#8a9a97;font-size:20px;cursor:pointer;padding:0;line-height:1;">‹</button>'
+          + '<div style="font-size:18px;font-weight:700;">你想先用哪些功能？</div></div>'
+          + '<div style="font-size:12px;color:#8a9a97;margin-bottom:16px;">可複選，之後都能在設定裡調整。</div>'
           + opt('bill', '信用卡帳單', '帳單直接從 Email 抓取，追蹤繳款')
           + opt('expense', '每日消費', '信用卡消費通知自動記帳')
           + opt('invoice', '發票匹配消費', '次月發票明細自動比對上月消費')
@@ -3243,6 +3324,7 @@
           + '<div class="qa-btns" style="margin-top:8px;"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
           + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">下一步</button></div>'
           + '</div>';
+        document.getElementById('obBack').onclick = () => { step = 'intro'; renderIntro(); };
         overlay.querySelectorAll('.ob-opt').forEach(btn => {
           btn.onclick = () => { needs[btn.dataset.key] = !needs[btn.dataset.key]; renderOb(); };
         });
@@ -3285,7 +3367,7 @@
           }
         };
       }
-      renderOb();
+      renderIntro();
     }
 
     // ===== 廣告版位（banner.json 控制，改 JSON 即換廣告） =====
