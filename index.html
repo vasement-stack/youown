@@ -2012,7 +2012,10 @@
         return ia - ib;
       });
       const total = accountsData.reduce((s,a) => s + a.balance, 0);
-      let html = '<div class="total-card"><div class="tc-label">🔥 總資產</div><div class="tc-amount">$' + fmt(total) + '</div></div>';
+      let html = '<div class="total-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+        + '<div><div class="tc-label">🔥 總資產</div><div class="tc-amount">$' + fmt(total) + '</div></div>'
+        + '<button id="linkTransfersBtn" style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;padding:5px 11px;font-size:11px;color:#fff;font-weight:600;cursor:pointer;flex-shrink:0;">🔗 互轉配對</button>'
+        + '</div></div>';
 
       for (const a of sorted) {
         const neg = a.balance < 0;
@@ -2030,6 +2033,10 @@
         html += '</div>';
       }
       setContent(html);
+
+      // 互轉配對入口
+      const ltBtn = document.getElementById('linkTransfersBtn');
+      if (ltBtn) ltBtn.onclick = () => openLinkTransfers();
 
       // 校正按鈕
       document.querySelectorAll('.btn-fix').forEach(btn => {
@@ -2078,6 +2085,89 @@
           }
         };
       });
+    }
+
+    // ===== 互轉配對（事後把「同日期同金額、一轉出一轉入」的兩筆標記成互轉）=====
+    // 只改兩筆的 note（寫成「互轉 A→B」），不動餘額——兩筆當初記帳時餘額已各自加減過，再動會重複。
+    // note 含「互轉」的轉帳，現金流會自動歸為灰色（見 loadCashflowData 的 isMutual 判斷）。
+    async function loadTransfersWithRow() {
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A2:H100000',{headers:{'Authorization':'Bearer '+accessToken}});
+      const d = await res.json();
+      return (d.values||[]).map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'' })).filter(t => t.date);
+    }
+    function findMutualPairs(transfers) {
+      const clean = t => { const n = t.note || ''; return !n.includes('互轉') && !n.includes('卡費') && !n.includes('忽略互轉'); };
+      const outs = transfers.filter(t => t.type === '轉出' && clean(t));
+      const ins  = transfers.filter(t => t.type === '轉入' && clean(t));
+      const usedIn = new Set();
+      const pairs = [];
+      for (const out of outs) {
+        const match = ins.find(i => !usedIn.has(i.row) && i.date === out.date && Number(i.amount) === Number(out.amount));
+        if (match) { usedIn.add(match.row); pairs.push({ out, in: match }); }
+      }
+      return pairs;
+    }
+    function openLinkTransfers() {
+      const overlay = document.createElement('div');
+      overlay.className = 'qa-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      document.body.appendChild(overlay);
+      let pairs = [];
+      function shell(inner) {
+        return '<div class="qa-panel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
+          + '<div style="font-size:17px;font-weight:700;">🔗 互轉配對</div>'
+          + '<button id="ltClose" style="background:none;border:none;font-size:14px;color:#aaa;cursor:pointer;">關閉</button></div>'
+          + '<div style="font-size:12px;color:#9aa;margin-bottom:14px;line-height:1.6;">把「同一天、同金額、一轉出一轉入」的兩筆，標記為自己帳戶間的互轉。標記後不影響餘額，只會在總覽裡不計入收支。</div>'
+          + inner + '</div>';
+      }
+      function bindClose() { const c = document.getElementById('ltClose'); if (c) c.onclick = () => overlay.remove(); }
+      overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">載入中...</div>');
+      bindClose();
+      function renderList() {
+        if (!pairs.length) { overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">沒有可配對的互轉 🎉</div>'); bindClose(); return; }
+        let inner = '';
+        pairs.forEach((p, idx) => {
+          inner += '<div style="background:#f7faf9;border-radius:12px;padding:14px 16px;margin-bottom:10px;">'
+            + '<div style="font-size:13px;opacity:.5;margin-bottom:6px;">' + esc(p.out.date) + '</div>'
+            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+            + '<div style="font-size:14px;"><span class="dot" style="background:' + getBankColor(p.out.bank) + ';"></span>' + esc(p.out.bank) + ' → <span class="dot" style="background:' + getBankColor(p.in.bank) + ';"></span>' + esc(p.in.bank) + '</div>'
+            + '<div style="font-weight:700;">$' + fmt(p.out.amount) + '</div></div>'
+            + '<div style="display:flex;gap:8px;">'
+            + '<button class="lt-confirm" data-idx="' + idx + '" style="flex:1;padding:8px;border-radius:8px;border:none;background:#00897b;color:#fff;font-weight:600;cursor:pointer;font-size:13px;">確認互轉</button>'
+            + '<button class="lt-ignore" data-idx="' + idx + '" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;cursor:pointer;font-size:13px;">忽略</button>'
+            + '</div></div>';
+        });
+        overlay.innerHTML = shell(inner);
+        bindClose();
+        overlay.querySelectorAll('.lt-confirm').forEach(btn => btn.onclick = () => confirmPair(parseInt(btn.dataset.idx), btn));
+        overlay.querySelectorAll('.lt-ignore').forEach(btn => btn.onclick = () => ignorePair(parseInt(btn.dataset.idx), btn));
+      }
+      async function confirmPair(idx, btn) {
+        const p = pairs[idx];
+        btn.disabled = true; btn.textContent = '處理中...';
+        try {
+          const note = '互轉 ' + p.out.bank + '→' + p.in.bank;
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
+            { range:'transfers!H'+p.out.row, values:[[note]] },
+            { range:'transfers!H'+p.in.row,  values:[[note]] }
+          ]})});
+          pairs.splice(idx, 1);
+          writeCache('transfers', await loadAllTransfers());
+          renderList();
+        } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled = false; btn.textContent = '確認互轉'; }
+      }
+      async function ignorePair(idx, btn) {
+        const p = pairs[idx];
+        btn.disabled = true;
+        try {
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H'+p.out.row+'?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['忽略互轉']]})});
+          pairs.splice(idx, 1);
+          writeCache('transfers', await loadAllTransfers());
+          renderList();
+        } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled = false; }
+      }
+      loadTransfersWithRow().then(ts => { pairs = findMutualPairs(ts); renderList(); })
+        .catch(() => { overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">載入失敗，請關閉後再試</div>'); bindClose(); });
     }
 
     async function setAccountBalance(bank, balance) {
