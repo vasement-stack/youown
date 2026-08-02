@@ -602,7 +602,7 @@
           <h2>資料同步</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="openMyBanksSetting()">
-              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與餘額</div></div>
+              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與餘額，可隨時手動校正更新</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openBankSetting()">
@@ -1989,14 +1989,18 @@
     }
 
     async function loadTransfersForBank(bank) {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:G100000',
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:I100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
       return (data.values || [])
-        .map(r => ({ date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10) }))
+        .map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10), note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1') }))
         .filter(t => t.bank === bank)
-        .sort((a,b) => (b.date||'').localeCompare(a.date||''))
-        .slice(0, 10);
+        .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+    }
+    // 設定某筆轉帳的隱藏狀態（I 欄）。只改標記，不動餘額——錢已在記帳/同步時反映
+    async function setTransferHidden(row, hidden) {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I'+row+'?valueInputOption=RAW',
+        {method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[hidden?'TRUE':'']]})});
     }
 
     function renderAccounts() {
@@ -2067,24 +2071,75 @@
           const trEl = document.getElementById('tr_' + bank);
           if (trEl.innerHTML) { trEl.innerHTML = ''; return; }
           trEl.innerHTML = '<div class="tr-row" style="opacity:.4;">載入中...</div>';
-          const transfers = await loadTransfersForBank(bank);
-          if (!transfers.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
-          const renderTrRows = (list) => list.map(t => {
-            const isIn = ['轉入','收入'].includes(t.type);
-            return '<div class="tr-row"><div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + '</div>'
-              + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
-          }).join('');
-          // 預設只顯示 5 筆，其餘收在「顯示更多」
-          if (transfers.length <= 5) {
-            trEl.innerHTML = renderTrRows(transfers);
-          } else {
-            trEl.innerHTML = renderTrRows(transfers.slice(0,5))
-              + '<div class="tr-row" id="trMore_' + esc(bank) + '" style="justify-content:center;color:#00897b;cursor:pointer;font-size:13px;">顯示更多（' + (transfers.length-5) + ' 筆）</div>';
-            const moreBtn = document.getElementById('trMore_' + bank);
-            if (moreBtn) moreBtn.onclick = () => { trEl.innerHTML = renderTrRows(transfers); };
-          }
+          await renderBankTransfers(bank, trEl);
         };
       });
+    }
+
+    // 渲染某帳戶的轉帳明細（可點開隱藏、已隱藏折疊找回）。狀態存在閉包裡，重繪不影響其他帳戶
+    async function renderBankTransfers(bank, trEl) {
+      const all = await loadTransfersForBank(bank);
+      if (!all.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
+      let expandedRow = null;    // 目前點開操作列的那筆 row
+      let showAllVisible = false; // 可見清單是否展開全部（預設 5 筆）
+      let showHidden = false;     // 是否展開已隱藏區
+
+      function rowHtml(t) {
+        const isIn = ['轉入','收入'].includes(t.type);
+        const opened = expandedRow === t.row;
+        let h = '<div class="tr-row tr-clickable" data-row="' + t.row + '" style="cursor:pointer;' + (t.hidden?'opacity:.45;':'') + '">'
+          + '<div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + (t.note?' · '+esc(t.note):'') + '</div>'
+          + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
+        if (opened) {
+          h += '<div style="padding:10px 16px 14px;background:#f7faf9;border-bottom:1px solid #f0f0f0;">'
+            + '<div style="font-size:11px;color:#9aa;line-height:1.6;margin-bottom:10px;">隱藏不影響帳戶餘額——這筆錢實際已反映在餘額中，只是不在總覽計入、也不顯示在明細。</div>'
+            + '<button class="tr-hide-toggle" data-row="' + t.row + '" data-hidden="' + (t.hidden?'1':'0') + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid ' + (t.hidden?'#00897b':'#dde8e5') + ';background:' + (t.hidden?'#00897b':'#fff') + ';color:' + (t.hidden?'#fff':'#556') + ';font-size:13px;font-weight:600;cursor:pointer;">' + (t.hidden?'✓ 已隱藏（點此取消）':'隱藏這筆') + '</button>'
+            + '</div>';
+        }
+        return h;
+      }
+
+      function render() {
+        const visible = all.filter(t => !t.hidden);
+        const hidden = all.filter(t => t.hidden);
+        let html = '';
+        const shownVisible = showAllVisible ? visible : visible.slice(0,5);
+        html += shownVisible.map(rowHtml).join('');
+        if (visible.length > 5 && !showAllVisible) {
+          html += '<div class="tr-row tr-more" style="justify-content:center;color:#00897b;cursor:pointer;font-size:13px;">顯示更多（' + (visible.length-5) + ' 筆）</div>';
+        }
+        if (!visible.length) html += '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有顯示中的轉帳</div>';
+        if (hidden.length) {
+          html += '<div class="tr-row tr-hidden-toggle" style="justify-content:center;color:#aaa;cursor:pointer;font-size:13px;border-top:1px solid #f0f0f0;">' + (showHidden?'收起已隱藏 ▲':'顯示已隱藏（' + hidden.length + '）▼') + '</div>';
+          if (showHidden) html += hidden.map(rowHtml).join('');
+        }
+        trEl.innerHTML = html;
+
+        trEl.querySelectorAll('.tr-clickable').forEach(row => {
+          row.onclick = () => { const r = parseInt(row.dataset.row); expandedRow = (expandedRow===r)?null:r; render(); };
+        });
+        const more = trEl.querySelector('.tr-more');
+        if (more) more.onclick = () => { showAllVisible = true; render(); };
+        const ht = trEl.querySelector('.tr-hidden-toggle');
+        if (ht) ht.onclick = () => { showHidden = !showHidden; render(); };
+        trEl.querySelectorAll('.tr-hide-toggle').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            const r = parseInt(btn.dataset.row);
+            const willHide = btn.dataset.hidden !== '1';
+            btn.disabled = true; btn.textContent = '處理中...';
+            try {
+              await setTransferHidden(r, willHide);
+              const t = all.find(x => x.row === r); if (t) t.hidden = willHide; // 更新本地
+              expandedRow = null;
+              writeCache('transfers', await loadAllTransfers()); // 讓總覽同步排除
+              render();
+              showToast(willHide ? '已隱藏' : '已取消隱藏');
+            } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; }
+          };
+        });
+      }
+      render();
     }
 
     // ===== 互轉配對（事後把「同日期同金額、一轉出一轉入」的兩筆標記成互轉）=====
@@ -2208,6 +2263,7 @@
       // 轉帳 → 依 type + note 分大類
       for (const t of tr) {
         if (!t.date) continue;
+        if (t.hidden) continue; // 已隱藏：不計入總覽、也不列在明細（餘額不受影響，已在記帳/同步時反映）
         const mm = ensure(t.date.slice(0,7));
         const label = t.bank + ' · ' + (t.note || t.type);
         const item = { date:t.date, label, amount:t.amount };
@@ -2255,10 +2311,10 @@
     async function loadAllTransfers() {
       if (!spreadsheetId) return [];
       try {
-        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:H100000',
+        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:I100000',
           { headers: { 'Authorization': 'Bearer ' + accessToken } });
         const data = await res.json();
-        return (data.values || []).map(r => ({ date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'' })).filter(t => t.date);
+        return (data.values || []).map(r => ({ date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1') })).filter(t => t.date);
       } catch(e) { return []; }
     }
 
@@ -3278,15 +3334,16 @@
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
       else{const add=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{addSheet:{properties:{title:'transfers'}}}]})})).json();sheetId=add.replies[0].addSheet.properties.sheetId;}
-      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note'];
-      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:H1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note','隱藏'];
+      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:I1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
       const firstRow=(fr.values&&fr.values[0])||[];
       if(!(firstRow[0]==='日期'&&firstRow[6]==='gmail_message_id')){
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{insertDimension:{range:{sheetId,dimension:'ROWS',startIndex:0,endIndex:1}}}]})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
-      } else if (firstRow[7] !== 'note') {
-        // 舊分頁補 note 標題
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['note']]})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:I1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
+      } else {
+        // 舊分頁補標題（note=H、隱藏=I）
+        if (firstRow[7] !== 'note') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['note']]})});
+        if (firstRow[8] !== '隱藏') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['隱藏']]})});
       }
     }
     async function getExistingTransferIds() {
