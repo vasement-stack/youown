@@ -1989,18 +1989,88 @@
     }
 
     async function loadTransfersForBank(bank) {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:I100000',
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:J100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
       return (data.values || [])
-        .map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10), note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1') }))
+        .map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10), gmail_id:r[6]||'', note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1'), pair_id:r[9]||'' }))
         .filter(t => t.bank === bank)
         .sort((a,b) => (b.date||'').localeCompare(a.date||''));
     }
+    // 是否為手動記錄（gmail_id 以 manual_ 開頭）
+    function isManualTransfer(t) { return (t.gmail_id||'').startsWith('manual_'); }
     // 設定某筆轉帳的隱藏狀態（I 欄）。只改標記，不動餘額——錢已在記帳/同步時反映
     async function setTransferHidden(row, hidden) {
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I'+row+'?valueInputOption=RAW',
         {method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[hidden?'TRUE':'']]})});
+    }
+
+    // ===== 刪除手動轉帳（含互轉成對處理）=====
+    // 讀全表（找配對可能在別家帳戶）。回傳帶 row/gmail_id/pair_id 的完整列
+    async function loadAllTransfersFull() {
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A2:J100000',{headers:{'Authorization':'Bearer '+accessToken}});
+      const d = await res.json();
+      return (d.values||[]).map((r,i)=>({ row:i+2, date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), gmail_id:r[6]||'', note:r[7]||'', pair_id:r[9]||'' })).filter(t=>t.date);
+    }
+    // 找某筆的互轉配對對象（pair_id 優先，fallback：手動互轉 _out/_in 前綴、舊事後配對同日同額反向 note 相同）
+    function findPairPartner(t, all) {
+      if (t.pair_id) return all.find(x => x.row !== t.row && x.pair_id === t.pair_id) || null;
+      const gid = t.gmail_id || '';
+      const mm = gid.match(/^(manual_\d+)_(out|in)$/);
+      if (mm) { const base = mm[1], other = mm[2]==='out'?'in':'out'; return all.find(x => x.gmail_id === base+'_'+other) || null; }
+      // 舊事後配對：note 含互轉但無 pair_id、無前綴 → 同日同額、方向相反、note 相同
+      if ((t.note||'').includes('互轉')) {
+        const wantType = ['轉入','收入'].includes(t.type) ? '轉出' : '轉入';
+        return all.find(x => x.row !== t.row && x.date === t.date && Number(x.amount) === Number(t.amount) && x.type === wantType && x.note === t.note) || null;
+      }
+      return null;
+    }
+    // 刪除一列
+    async function deleteTransferRow(row) {
+      const meta = await fetchSheetMeta();
+      const sheet = meta.sheets.find(s => s.properties.title === 'transfers');
+      if (!sheet) return;
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:sheet.properties.sheetId,dimension:'ROWS',startIndex:row-1,endIndex:row}}}]})});
+    }
+    // 清除某筆的互轉標記（同步配對筆用：不刪、還原成普通轉帳，重新計入現金流）
+    async function clearMutualMark(row) {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
+        { range:'transfers!H'+row, values:[['']] },
+        { range:'transfers!J'+row, values:[['']] }
+      ]})});
+    }
+    // 一筆轉帳對餘額的影響（刪除時要反向還原）：轉入/收入為 +，轉出/提款/提領為 -
+    function transferDelta(t) {
+      if (['轉入','收入'].includes(t.type)) return t.amount;
+      if (['轉出','提款','提領'].includes(t.type)) return -t.amount;
+      return 0;
+    }
+    // 刪除手動轉帳主流程。t 為 loadTransfersForBank 的一列（含 row/type/pair_id/gmail_id）
+    async function deleteTransferFull(t) {
+      const all = await loadAllTransfersFull();
+      const partner = findPairPartner(t, all);
+      // 要刪的列 + 餘額還原（反向 delta）
+      const rowsToDelete = [];
+      const balanceDeltas = {};
+      const addDel = (x) => { rowsToDelete.push(x.row); balanceDeltas[x.bank] = (balanceDeltas[x.bank]||0) - transferDelta(x); };
+      addDel(t);
+      if (partner) {
+        if (isManualTransfer(partner)) {
+          // 配對也是手動 → 成對刪，兩邊餘額都還原
+          addDel(partner);
+        } else {
+          // 配對是同步來的 → 不刪（會復活），改清互轉標記變回普通轉帳；它的餘額不動（本來就對）
+          await clearMutualMark(partner.row);
+        }
+      }
+      // 套用餘額還原
+      await applyBalanceDeltas(balanceDeltas);
+      // 刪列：由大到小刪，避免行號位移
+      rowsToDelete.sort((a,b)=>b-a);
+      for (const r of rowsToDelete) await deleteTransferRow(r);
+      writeCache('transfers', await loadAllTransfers());
+      writeCache('accounts', await loadAccounts());
+      return { deleted: rowsToDelete.length, clearedPartner: partner && !isManualTransfer(partner) };
     }
 
     function renderAccounts() {
@@ -2091,10 +2161,17 @@
           + '<div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + (t.note?' · '+esc(t.note):'') + '</div>'
           + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
         if (opened) {
+          const manual = isManualTransfer(t);
+          const isMutualRow = !!t.pair_id || /^manual_\d+_(out|in)$/.test(t.gmail_id||'') || (t.note||'').includes('互轉');
           h += '<div style="padding:10px 16px 14px;background:#f7faf9;border-bottom:1px solid #f0f0f0;">'
             + '<div style="font-size:11px;color:#9aa;line-height:1.6;margin-bottom:10px;">隱藏不影響帳戶餘額——這筆錢實際已反映在餘額中，只是不在總覽計入、也不顯示在明細。</div>'
-            + '<button class="tr-hide-toggle" data-row="' + t.row + '" data-hidden="' + (t.hidden?'1':'0') + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid ' + (t.hidden?'#00897b':'#dde8e5') + ';background:' + (t.hidden?'#00897b':'#fff') + ';color:' + (t.hidden?'#fff':'#556') + ';font-size:13px;font-weight:600;cursor:pointer;">' + (t.hidden?'✓ 已隱藏（點此取消）':'隱藏這筆') + '</button>'
-            + '</div>';
+            + '<button class="tr-hide-toggle" data-row="' + t.row + '" data-hidden="' + (t.hidden?'1':'0') + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid ' + (t.hidden?'#00897b':'#dde8e5') + ';background:' + (t.hidden?'#00897b':'#fff') + ';color:' + (t.hidden?'#fff':'#556') + ';font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">' + (t.hidden?'✓ 已隱藏（點此取消）':'隱藏這筆') + '</button>';
+          if (manual) {
+            h += '<button class="tr-delete" data-row="' + t.row + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid #f44336;background:none;color:#f44336;font-size:13px;font-weight:600;cursor:pointer;">刪除這筆' + (isMutualRow?'（互轉，含配對）':'') + '</button>';
+          } else {
+            h += '<div style="font-size:11px;color:#bbc;text-align:center;">同步進來的記錄無法刪除，可改用「隱藏」或到帳戶卡「校正」餘額</div>';
+          }
+          h += '</div>';
         }
         return h;
       }
@@ -2136,6 +2213,36 @@
               render();
               showToast(willHide ? '已隱藏' : '已取消隱藏');
             } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; }
+          };
+        });
+        trEl.querySelectorAll('.tr-delete').forEach(btn => {
+          btn.onclick = async (e) => {
+            e.stopPropagation();
+            const r = parseInt(btn.dataset.row);
+            const t = all.find(x => x.row === r); if (!t) return;
+            btn.disabled = true; btn.textContent = '檢查中...';
+            let allFull, partner;
+            try {
+              allFull = await loadAllTransfersFull();
+              partner = findPairPartner(t, allFull);
+            } catch (err) { showToast('讀取失敗，請再試一次'); btn.disabled=false; btn.textContent='刪除這筆'; return; }
+            // 依配對類型給不同確認說明，讓使用者按確認前就知道會發生什麼
+            let msg;
+            if (partner && isManualTransfer(partner)) {
+              msg = '這是一筆互轉，會同時刪除配對的另一筆（' + partner.bank + ' ' + partner.type + '），兩邊餘額都會還原。確定刪除？';
+            } else if (partner) {
+              msg = '配對的另一筆是同步進來的記錄，無法刪除。刪除這筆後，那筆會轉回一般轉帳（重新計入收支）。確定刪除？';
+            } else {
+              msg = '確定刪除這筆記錄？餘額會一併還原。';
+            }
+            if (!confirm(msg)) { btn.disabled=false; render(); return; }
+            btn.textContent = '刪除中...';
+            try {
+              const res = await deleteTransferFull(t);
+              accountsData = await getAccountsData(true);
+              showToast(res.clearedPartner ? '已刪除，配對的同步記錄已轉回一般轉帳' : '已刪除');
+              renderAccounts();
+            } catch (err) { showToast('刪除失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; btn.textContent='刪除這筆'; }
           };
         });
       }
@@ -2202,9 +2309,13 @@
         btn.disabled = true; btn.textContent = '處理中...';
         try {
           const note = '互轉 ' + p.out.bank + '→' + p.in.bank;
+          const pairId = 'pair_' + Date.now();
+          // note（H）標示互轉讓現金流歸灰；pair_id（J）建立硬關聯，供刪除時可靠成對處理
           await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
             { range:'transfers!H'+p.out.row, values:[[note]] },
-            { range:'transfers!H'+p.in.row,  values:[[note]] }
+            { range:'transfers!J'+p.out.row, values:[[pairId]] },
+            { range:'transfers!H'+p.in.row,  values:[[note]] },
+            { range:'transfers!J'+p.in.row,  values:[[pairId]] }
           ]})});
           pairs.splice(idx, 1);
           writeCache('transfers', await loadAllTransfers());
@@ -3334,16 +3445,17 @@
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
       else{const add=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{addSheet:{properties:{title:'transfers'}}}]})})).json();sheetId=add.replies[0].addSheet.properties.sheetId;}
-      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note','隱藏'];
-      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:I1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note','隱藏','pair_id'];
+      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:J1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
       const firstRow=(fr.values&&fr.values[0])||[];
       if(!(firstRow[0]==='日期'&&firstRow[6]==='gmail_message_id')){
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{insertDimension:{range:{sheetId,dimension:'ROWS',startIndex:0,endIndex:1}}}]})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:I1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:J1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
       } else {
-        // 舊分頁補標題（note=H、隱藏=I）
+        // 舊分頁補標題（note=H、隱藏=I、pair_id=J）
         if (firstRow[7] !== 'note') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['note']]})});
         if (firstRow[8] !== '隱藏') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['隱藏']]})});
+        if (firstRow[9] !== 'pair_id') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!J1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['pair_id']]})});
       }
     }
     async function getExistingTransferIds() {
@@ -3644,10 +3756,12 @@
       } else if (s.type === '互轉') {
         await ensureTransfersSheet();
         const mutualNote = '互轉 ' + s.bank + '→' + s.toBank + (s.note?' '+s.note:'');
+        const pairId = 'pair_' + Date.now();
+        // 兩筆共用 pairId（J 欄），刪除時靠它可靠成對處理。G 欄的 _out/_in 保留為 fallback
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
           {method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[
-            [s.date,s.bank,'轉出','','',amount,manualId+'_out',mutualNote],
-            [s.date,s.toBank,'轉入','','',amount,manualId+'_in',mutualNote]
+            [s.date,s.bank,'轉出','','',amount,manualId+'_out',mutualNote,'',pairId],
+            [s.date,s.toBank,'轉入','','',amount,manualId+'_in',mutualNote,'',pairId]
           ]})});
       } else {
         await ensureTransfersSheet();
