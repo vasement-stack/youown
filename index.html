@@ -2954,7 +2954,19 @@
     function parseTaishinBill(text){ const r={}; const roc=(y,mo,d)=>(parseInt(y)+1911)+'-'+mo+'-'+d; const b=text.match(/帳單結帳日\s+(\d{3})\/(\d{2})\/(\d{2})/); if(b)r.bill_date=roc(b[1],b[2],b[3]); const d=text.match(/繳款截止日\s+(\d{3})\/(\d{2})\/(\d{2})/); if(d)r.due_date=roc(d[1],d[2],d[3]); const t=text.match(/本期累計應繳金額\s+([\d,]+)/); if(t)r.total_amount=parseInt(t[1].replace(/,/g,''),10); const mi=text.match(/本期最低應繳金額\s+([\d,]+)/); if(mi)r.min_payment=parseInt(mi[1].replace(/,/g,''),10); if(r.total_amount===undefined)return null; return r; }
 
     // ===== 帳戶(存款/轉帳) parser =====
-    function parseSinopacTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/金額[：:]\s*NT?\$?\s*([\d,]+)/)||body.match(/([\d,]+)\s*元/); const fm=body.match(/轉出帳號[：:]\s*(\S+)/); const tm=body.match(/轉入帳號[：:]\s*(\S+)/); const type=body.includes('轉出')?'轉出':'轉入'; if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'永豐',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
+    function parseSinopacTransfer(body){
+      // 永豐 DAWHO 即時轉帳通知真實格式（extractBody 壓成一行）：
+      // 「交易時間 2026/07/27 20:48:48 ... 轉出金額 9600 手續費 0 ...」欄位名+空白+值，無冒號無「元」
+      const d = body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/) || body.match(/(\d{4})\/(\d{2})\/(\d{2})/);
+      const a = body.match(/轉出金額\s*([\d,]+)/) || body.match(/轉入金額\s*([\d,]+)/) || body.match(/金額[：:]?\s*NT?\$?\s*([\d,]+)/);
+      if (!d || !a) return null;
+      // 有「轉出金額」為轉出、有「轉入金額」為轉入；預設轉出（DAWHO 登入後轉帳通知多為本人轉出）
+      const type = body.includes('轉入金額') ? '轉入' : '轉出';
+      const to = (body.match(/收款對象\s*([^\s]+)/) || [])[1] || '';
+      const from = (body.match(/轉出帳戶[^\d]*([\d\-X]+)/) || [])[1] || '';
+      const seq = (body.match(/交易序號\s*([A-Z0-9]+)/) || [])[1] || '';
+      return { date: d[1]+'-'+d[2]+'-'+d[3], bank:'永豐', type, from_account: type==='轉出'?from:'', to_account: type==='轉出'?to:'', amount: parseInt(a[1].replace(/,/g,''),10), seq };
+    }
     function parseCtbcTransfer(body){ const d=body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/交易金額\s*新臺幣\s*([\d,]+)/); const type=body.includes('提領')?'提領':(body.includes('轉出')?'轉出':'轉入'); const acc=body.match(/交易帳號\s*(\S+)/); if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'中信',type,from_account:acc?acc[1]:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     // 台新無卡提款：「設定通知」(有金額)+「交易結果通知」(證明有實際執行)兩封配對。
     // 決策（2026/07）：結果通知的「提款結果：提款成功」字樣無法穩定從 MIME 內文提取（曾導致整批漏記），
@@ -3266,20 +3278,17 @@
         for (const src of ACCOUNT_SOURCES) {
           if (!isEnabled(src.bank, 'account')) continue;
           const msgs = await gmailSearch(src.query + ' ' + dateFilter);
-          console.log('[帳戶同步][' + src.bank + '] 搜尋:', src.query + ' ' + dateFilter, '→ 找到', msgs.length, '封');
           for (let i=0;i<msgs.length;i+=10) {
             const batch = msgs.slice(i,i+10);
             await Promise.all(batch.map(async (msg) => {
-              if (existingTrIds.has(msg.id)) { if(src.bank==='永豐') console.log('[永豐] msg', msg.id, '已存在，跳過'); return; }
+              if (existingTrIds.has(msg.id)) return;
               const md = await fetchMsg(msg.id); if(!md) return;
-              const body = extractBody(md.payload);
-              const p = src.parse(body);
-              if (src.bank === '永豐') {
-                console.log('[永豐] msg', msg.id, '| extractBody 長度', body.length);
-                console.log('[永豐] body 內容:', JSON.stringify(body.slice(0, 600)));
-                console.log('[永豐] parse 結果:', JSON.stringify(p));
+              const p = src.parse(extractBody(md.payload));
+              if (p) {
+                // 永豐等 parser 可能帶收款對象/序號 → 存進 note 方便辨識（尤其分辨轉給自己 vs 給別人）
+                const note = p.to_account ? ('轉給 ' + p.to_account + (p.seq?' ('+p.seq+')':'')) : (p.seq||'');
+                trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id,note]);
               }
-              if (p) trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]);
             }));
           }
         }
