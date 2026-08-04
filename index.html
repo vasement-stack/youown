@@ -3266,12 +3266,19 @@
         for (const src of ACCOUNT_SOURCES) {
           if (!isEnabled(src.bank, 'account')) continue;
           const msgs = await gmailSearch(src.query + ' ' + dateFilter);
+          console.log('[帳戶同步][' + src.bank + '] 搜尋:', src.query + ' ' + dateFilter, '→ 找到', msgs.length, '封');
           for (let i=0;i<msgs.length;i+=10) {
             const batch = msgs.slice(i,i+10);
             await Promise.all(batch.map(async (msg) => {
-              if (existingTrIds.has(msg.id)) return;
+              if (existingTrIds.has(msg.id)) { if(src.bank==='永豐') console.log('[永豐] msg', msg.id, '已存在，跳過'); return; }
               const md = await fetchMsg(msg.id); if(!md) return;
-              const p = src.parse(extractBody(md.payload));
+              const body = extractBody(md.payload);
+              const p = src.parse(body);
+              if (src.bank === '永豐') {
+                console.log('[永豐] msg', msg.id, '| extractBody 長度', body.length);
+                console.log('[永豐] body 內容:', JSON.stringify(body.slice(0, 600)));
+                console.log('[永豐] parse 結果:', JSON.stringify(p));
+              }
               if (p) trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]);
             }));
           }
