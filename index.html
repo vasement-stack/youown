@@ -3309,6 +3309,17 @@
         const existingBills = await getExistingBillKeys();
         const billRows = [];
         const seenKeys = {};
+        // 歷史帳單自動標已繳：繳款截止日在今天前 >60 天者視為歷史（60天＝放行最近一整期）。
+        // 只標狀態、不扣餘額——有設起始餘額者該款項已含在起始餘額、沒設者本就無餘額可扣。
+        // due_date 為空時無法判斷，保守當「未繳」（不自動標）。
+        let autoPaidCount = 0;
+        const isHistoricalBill = (dueDate) => {
+          if (!dueDate) return false;
+          const due = new Date(dueDate + 'T00:00:00');
+          if (isNaN(due.getTime())) return false;
+          const now = new Date(); now.setHours(0,0,0,0);
+          return (now - due) / 86400000 > 60;
+        };
         for (const src of BILL_SOURCES) {
           if (!isEnabled(src.bank, 'bill')) continue;
           const pw = sessionPasswords[src.bank] || '';
@@ -3322,7 +3333,12 @@
               const bill = src.parse(await extractPdfText(b64ToAB(attData.data), pw));
               if (bill && bill.bill_date) {
                 const key = src.bank + '_' + bill.bill_date.slice(0,7);
-                if (!existingBills.has(key) && !seenKeys[key]) { seenKeys[key]=true; billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0,'未繳',key]); }
+                if (!existingBills.has(key) && !seenKeys[key]) {
+                  seenKeys[key]=true;
+                  const historical = isHistoricalBill(bill.due_date);
+                  if (historical) autoPaidCount++;
+                  billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0, historical?'已繳':'未繳', key]);
+                }
               }
             } catch(e){}
           }
@@ -3358,6 +3374,10 @@
 
         const sec = ((performance.now()-t0)/1000).toFixed(1);
         showToast('同步完成！消費+'+expAdded+' 帳戶+'+acctAdded+' 帳單+'+billAdded+' 發票+'+invAdded+'（'+sec+'秒）');
+        if (autoPaidCount > 0) {
+          // 歷史帳單自動標已繳的告知（延遲彈出，不蓋掉主 toast）
+          setTimeout(() => showToast('已自動將 ' + autoPaidCount + ' 筆較早的帳單標為已繳，可到帳單頁的已繳區還原'), 2600);
+        }
         await refreshAllCache();
         await loadAndRender();
       } catch(e) {
