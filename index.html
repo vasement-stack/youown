@@ -292,6 +292,8 @@
 
   <script>
     const CLIENT_ID = '38899840747-fnjc7o4p6vscflgjftvmt6q4is03fjeb.apps.googleusercontent.com';
+    // iOS App Store 網址：上架後填入，全站「下載 App」共用此常數。留空時顯示「即將上架」
+    const IOS_APP_URL = '';
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const SCOPES = [
       'https://www.googleapis.com/auth/drive.file',
@@ -622,8 +624,8 @@
         <div class="setting-section">
           <h2>安全</h2>
           <div class="setting-card">
-            <div class="setting-item" onclick="alert('App 鎖：Face ID / PIN（開發中）')">
-              <div><div class="label">App 鎖</div><div class="sub">生物辨識 / PIN 解鎖</div></div>
+            <div class="setting-item" onclick="showAppOnlyFeature('App 鎖')">
+              <div><div class="label">App 鎖</div><div class="sub">生物辨識 / PIN 解鎖（App 版）</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -631,8 +633,8 @@
         <div class="setting-section">
           <h2>通知與偏好</h2>
           <div class="setting-card">
-            <div class="setting-item" onclick="alert('通知提醒時間（開發中）')">
-              <div><div class="label">通知</div><div class="sub">設定本地提醒時間，或帳單日出爐時提醒</div></div>
+            <div class="setting-item" onclick="showAppOnlyFeature('帳單提醒通知')">
+              <div><div class="label">通知</div><div class="sub">帳單截止前提醒（App 版）</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openTabSetting()">
@@ -659,6 +661,10 @@
           <div class="setting-card">
             <div class="setting-item" onclick="openAbout()">
               <div><div class="label">關於 YouOwn</div><div class="sub">為什麼會有這個 App</div></div>
+              <span class="arrow">›</span>
+            </div>
+            <div class="setting-item" onclick="openDownloadApp()">
+              <div><div class="label">下載 iOS App</div><div class="sub">App 版支援 App 鎖、帳單提醒通知等功能</div></div>
               <span class="arrow">›</span>
             </div>
             <!-- === 綠界贊助（iOS App 版需整段移除，改用 IAP；不可用 runtime 隱藏，須實際刪除避免 Apple 審查抓到外部付款）=== -->
@@ -693,6 +699,27 @@
     }
 
     // 關於 YouOwn（開發者敘事，動態覆蓋層）
+    // 共用「下載 iOS App」：有網址就跳 App Store，沒有就提示即將上架
+    function openDownloadApp() {
+      if (IOS_APP_URL) { window.open(IOS_APP_URL, '_blank', 'noopener,noreferrer'); }
+      else { showToast('iOS App 即將上架，敬請期待 📱'); }
+    }
+    // App 版限定功能：網頁版不支援，導向下載 App
+    function showAppOnlyFeature(name) {
+      const overlay = document.createElement('div');
+      overlay.className = 'qa-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+      overlay.innerHTML = '<div class="qa-panel">'
+        + '<div style="text-align:center;font-size:36px;margin-bottom:8px;">📱</div>'
+        + '<div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:10px;">' + esc(name) + '需要 App 版</div>'
+        + '<div style="text-align:center;font-size:14px;color:#7a8a87;line-height:1.7;margin-bottom:20px;">此功能網頁版不支援，請下載 iOS App 使用。</div>'
+        + '<button id="aofGo" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">下載 iOS App</button>'
+        + '<button id="aofClose" style="width:100%;background:none;color:#99a;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;">關閉</button>'
+        + '</div>';
+      document.body.appendChild(overlay);
+      document.getElementById('aofGo').onclick = () => { overlay.remove(); openDownloadApp(); };
+      document.getElementById('aofClose').onclick = () => overlay.remove();
+    }
     function openAbout() {
       const overlay = document.createElement('div');
       overlay.className = 'qa-overlay';
