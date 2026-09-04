@@ -1487,7 +1487,7 @@
         method: 'POST', headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ valueInputOption: 'RAW', data: [
           { range: 'expenses!A1:J1', values: [['日期','銀行','金額','備註','gmail_message_id','分類','狀態','發票明細','來源','排除']] },
-          { range: 'bills!A1:G1', values: [['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key']] },
+          { range: 'bills!A1:H1', values: [['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key','刪除']] },
           { range: 'transfers!A1:H1', values: [['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note']] },
           { range: 'invoices!A1:J1', values: [['日期','店名','金額','發票號碼','載具','統編','分類','狀態','配對消費','明細']] },
           { range: 'accounts!A1:B1', values: [['銀行','餘額']] },
@@ -1558,16 +1558,16 @@
 
     async function loadBills() {
       if (!spreadsheetId) return [];
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!A2:G100000',
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!A2:H100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
       const rows = data.values || [];
-      // [銀行, 結帳日, 繳款截止日, 應繳總額, 最低應繳, 狀態, key]
+      // [銀行, 結帳日, 繳款截止日, 應繳總額, 最低應繳, 狀態, key, 刪除]
       return rows.map(r => ({
         bank: r[0], bill_date: r[1], due_date: r[2],
         total_amount: parseInt(r[3]||'0',10), min_payment: parseInt(r[4]||'0',10),
-        status: r[5]||'未繳', key: r[6]
-      })).filter(b => b.bank && b.key);
+        status: r[5]||'未繳', key: r[6], deleted: (r[7]==='TRUE'||r[7]==='1')
+      })).filter(b => b.bank && b.key && !b.deleted); // 已標記刪除的不進畫面
     }
 
     // 日期輔助
@@ -1910,7 +1910,7 @@
             + '</div><div><div class="bill-amount">$' + fmt(b.total_amount) + '</div><div class="bill-tag">' + (isManual?'手動':'PDF 帳單') + '</div></div></div>'
             + '<div style="display:flex;gap:8px;">'
             + '<button class="btn-paid" data-key="' + b.key + '" style="flex:1;">✓ 標記已繳</button>'
-            + (isManual ? '<button class="bill-delete" data-key="' + esc(b.key) + '" style="flex:0 0 auto;margin-top:12px;padding:10px 14px;border-radius:10px;border:1px solid #f44336;background:none;color:#f44336;font-weight:600;cursor:pointer;font-size:14px;">刪除</button>' : '')
+            + '<button class="bill-delete" data-key="' + esc(b.key) + '" data-manual="' + (isManual?'1':'0') + '" style="flex:0 0 auto;margin-top:12px;padding:10px 14px;border-radius:10px;border:1px solid #f44336;background:none;color:#f44336;font-weight:600;cursor:pointer;font-size:14px;">刪除</button>'
             + '</div>'
             + '</div>';
         }
@@ -1923,7 +1923,7 @@
           + '<div class="pb-date">' + (b.due_date||'') + '</div></div>'
           + '<div style="display:flex;align-items:center;gap:8px;"><div style="font-weight:700;">$' + fmt(b.total_amount) + '</div>'
           + '<button class="bill-restore" data-key="' + esc(b.key) + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;white-space:nowrap;">還原未繳</button>'
-          + (isM ? '<button class="bill-delete" data-key="' + esc(b.key) + '" style="padding:4px 10px;border-radius:8px;border:1px solid #f44336;background:none;color:#f44336;font-size:11px;cursor:pointer;white-space:nowrap;">刪除</button>' : '')
+          + '<button class="bill-delete" data-key="' + esc(b.key) + '" data-manual="' + (isM?'1':'0') + '" style="padding:4px 10px;border-radius:8px;border:1px solid #f44336;background:none;color:#f44336;font-size:11px;cursor:pointer;white-space:nowrap;">刪除</button>'
           + '</div></div>'; };
         html += recent.map(renderPaidRow).join('');
         if (showOlderPaid) html += older.map(renderPaidRow).join('');
@@ -1954,7 +1954,7 @@
       const addBtn = document.getElementById('addManualBill');
       if (addBtn) addBtn.onclick = () => openAddBillDialog();
       document.querySelectorAll('.bill-delete').forEach(btn => { btn.onclick = async () => {
-        if (!confirm('確定刪除這筆手動帳單？')) return;
+        if (!confirm('確定刪除這筆帳單？')) return;
         btn.disabled = true; btn.textContent = '刪除中...';
         try {
           await deleteBillByKey(btn.dataset.key);
@@ -2010,16 +2010,14 @@
       };
     }
     // 刪除帳單（靠 key 找行整列刪）。只給手動帳單用（呼叫端已限定 manual_ 開頭）
+    // 標記帳單為刪除（H 欄）。軟刪除：整行留著、key 依然存在，同步時會直接跳過，不會復活
     async function deleteBillByKey(key) {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A2:G100000',{headers:{'Authorization':'Bearer '+accessToken}});
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A2:H100000',{headers:{'Authorization':'Bearer '+accessToken}});
       const rows = (await res.json()).values || [];
       let rowNum = -1;
       rows.forEach((r,i) => { if (r[6] === key) rowNum = i + 2; });
       if (rowNum < 0) return;
-      const meta = await fetchSheetMeta();
-      const sheet = meta.sheets.find(s => s.properties.title === 'bills');
-      if (!sheet) return;
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:sheet.properties.sheetId,dimension:'ROWS',startIndex:rowNum-1,endIndex:rowNum}}}]})});
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!H'+rowNum+'?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['TRUE']]})});
     }
 
     function openPayDialog(key) {
@@ -3461,8 +3459,13 @@
           }
         }
         if (billRows.length) {
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:billRows})});
-          billAdded = billRows.length;
+          // 寫入前重新檢查一次（縮小「兩次同步交疊」的競態窗口：中間可能已有別次同步寫入同 key）
+          const freshExisting = await getExistingBillKeys();
+          const toWrite = billRows.filter(r => !freshExisting.has(r[6]));
+          if (toWrite.length) {
+            await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:toWrite})});
+          }
+          billAdded = toWrite.length;
         }
 
         // ---- 發票 ----
@@ -3675,12 +3678,15 @@
       let billsSheetId;
       if(billsSheet){billsSheetId=billsSheet.properties.sheetId;}
       else{const add=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{addSheet:{properties:{title:'bills'}}}]})})).json();billsSheetId=add.replies[0].addSheet.properties.sheetId;}
-      const HEADER=['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key'];
-      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:G1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const HEADER=['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key','刪除'];
+      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:H1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
       const firstRow=(fr.values&&fr.values[0])||[];
       if(!(firstRow[0]==='銀行'&&firstRow[6]==='key')){
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{insertDimension:{range:{sheetId:billsSheetId,dimension:'ROWS',startIndex:0,endIndex:1}}}]})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:G1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[HEADER]})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[HEADER]})});
+      } else if (firstRow[7] !== '刪除') {
+        // 舊分頁補「刪除」標題
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['刪除']]})});
       }
     }
 
