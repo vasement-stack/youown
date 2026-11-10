@@ -2545,7 +2545,7 @@
     // 中信：信件本文就有數字（不需開 PDF）。順序：民國年、月、繳款截止日、應繳總額、最低應繳
     function parseCtbcBillBody(text, msgDate){
       if(/請不用繳款/.test(text)) return { skip:true }; // 本期無須繳款，視為正常解析但不記錄
-      const m=text.match(/(\d{3})\D{1,40}?(\d{1,2})\D{1,40}?(\d{3})\/(\d{2})\/(\d{2})\D{1,40}?(\d[\d,]*)\D{1,40}?(\d[\d,]*)/);
+      const m=text.match(/(\d{3})\D{1,40}?(\d{1,2})\D{1,40}?(\d{3})[\/\s]+(\d{2})[\/\s]+(\d{2})\D{1,40}?(\d[\d,]*)\D{1,40}?(\d[\d,]*)/);
       if(!m) return null;
       const r={};
       const y=parseInt(m[1],10)+1911, mo=String(parseInt(m[2],10)).padStart(2,'0');
