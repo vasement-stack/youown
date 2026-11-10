@@ -2660,7 +2660,7 @@
       { bank:'新光', sender:'service@ebill.skbank.com.tw', parse:parseSkbankBill },
       { bank:'華南', sender:'service@ebmail.hncb.com.tw', parse:parseHncbBill },
       { bank:'台新', sender:'webmaster@bhurecv.taishinbank.com.tw', parse:parseTaishinBill },
-      { bank:'中信', sender:'ebill@estats.ctbcbank.com', mode:'body', parse:parseCtbcBillBody },
+      { bank:'中信', sender:'ebill@estats.ctbcbank.com', extra:'subject:信用卡電子帳單', mode:'body', parse:parseCtbcBillBody },
     ];
 
     // ===== 同步主流程 =====
@@ -2759,7 +2759,7 @@
           if (!isEnabled(src.bank, 'bill')) continue;
           if (src.mode === 'body') {
             // 金額在信件本文，不需 PDF 密碼
-            const bmsgs = await gmailSearch('from:'+src.sender+' '+dateFilter);
+            const bmsgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' '+dateFilter);
             let parsedN = 0; let dbg = '';
             for (const msg of bmsgs) {
               const md = await fetchMsg(msg.id); if(!md) continue;
