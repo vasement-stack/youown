@@ -386,7 +386,7 @@
       { name:'新光', account:false, expense:'純文字', bill:true, needPw:true },
       { name:'華南', account:false, expense:'PDF', bill:true, needPw:true },
       { name:'台新', account:true, expense:null, bill:true, needPw:true },
-      { name:'中信', account:true, expense:'純文字', bill:false, needPw:false },
+      { name:'中信', account:true, expense:'純文字', bill:true, needPw:false },
       { name:'王道', account:true, expense:null, bill:false, needPw:false },
       { name:'上海', account:true, expense:null, bill:false, needPw:false },
     ];
@@ -2519,6 +2519,19 @@
     }
 
     // ===== 帳單 parser =====
+    // 中信：信件本文就有數字（不需開 PDF）。順序：民國年、月、繳款截止日、應繳總額、最低應繳
+    function parseCtbcBillBody(text, msgDate){
+      const m=text.match(/(\d{3})\s+(\d{1,2})\s+(\d{3})\/(\d{2})\/(\d{2})\s+(-?[\d,]+)\s+(-?[\d,]+)(?![\d,])/);
+      if(!m) return null;
+      const r={};
+      const y=parseInt(m[1],10)+1911, mo=String(parseInt(m[2],10)).padStart(2,'0');
+      r.due_date=(parseInt(m[3],10)+1911)+'-'+m[4]+'-'+m[5];
+      r.total_amount=parseInt(m[6].replace(/,/g,''),10);
+      r.min_payment=parseInt(m[7].replace(/,/g,''),10);
+      // 結帳日信中沒有，用帳單月份 + 收信日的「日」當近似值（只用來產生每月唯一 key）
+      r.bill_date=y+'-'+mo+'-'+String(msgDate.getDate()).padStart(2,'0');
+      return r;
+    }
     function parseSinopacBill(text){ const r={}; const b=text.match(/結帳日\s+(\d{4})\/(\d{2})\/(\d{2})/); if(b)r.bill_date=b[1]+'-'+b[2]+'-'+b[3]; const d=text.match(/繳款截止日\s+(\d{4})\/(\d{2})\/(\d{2})/); if(d)r.due_date=d[1]+'-'+d[2]+'-'+d[3]; const t=text.match(/本期應繳總金額\s+([\d,]+)/); if(t)r.total_amount=parseInt(t[1].replace(/,/g,''),10); const mi=text.match(/本期最低應繳金額\s+([\d,]+)/); if(mi)r.min_payment=parseInt(mi[1].replace(/,/g,''),10); if(r.total_amount===undefined)return null; return r; }
     function parseHsbcBill(text){ const r={}; const dates=[...text.matchAll(/(\d{4})\/(\d{2})\/(\d{2})/g)]; if(dates.length>=2){r.due_date=dates[0][1]+'-'+dates[0][2]+'-'+dates[0][3];r.bill_date=dates[1][1]+'-'+dates[1][2]+'-'+dates[1][3];} const rm=text.match(/\d+\.\d+%/); if(rm){const after=text.slice(text.indexOf(rm[0])+rm[0].length); const nums=[...after.matchAll(/-?[\d,]+/g)].map(m=>parseInt(m[0].replace(/,/g,''),10)).filter(n=>!isNaN(n)); if(nums.length>=6){r.total_amount=nums[4];r.min_payment=nums[5];}} if(r.total_amount===undefined)return null; return r; }
     function parseSkbankBill(text){ const r={}; const roc=d=>{const p=d.split('/');return(parseInt(p[0])+1911)+'-'+p[1]+'-'+p[2];}; const totals=[...text.matchAll(/本期應繳總金額：\s*([\d,]+)/g)]; if(totals.length)r.total_amount=parseInt(totals[totals.length-1][1].replace(/,/g,''),10); const dr=text.match(/([\d,]+)\s+([\d,]+)\s+(\d{3}\/\d{2}\/\d{2})\s+(\d{3}\/\d{2}\/\d{2})\s+[\d,]+/); if(dr){r.due_date=roc(dr[3]);r.bill_date=roc(dr[4]);if(r.min_payment===undefined)r.min_payment=parseInt(dr[2].replace(/,/g,''),10);}else{const r2=text.match(/繳\s*款\s+(\d{3}\/\d{2}\/\d{2})/);if(r2)r.bill_date=roc(r2[1]);} if(r.min_payment===undefined)r.min_payment=r.total_amount||0; if(r.total_amount===undefined)return null; return r; }
@@ -2624,6 +2637,7 @@
       { bank:'新光', sender:'service@ebill.skbank.com.tw', parse:parseSkbankBill },
       { bank:'華南', sender:'service@ebmail.hncb.com.tw', parse:parseHncbBill },
       { bank:'台新', sender:'webmaster@bhurecv.taishinbank.com.tw', parse:parseTaishinBill },
+      { bank:'中信', sender:'ebill@estats.ctbcbank.com', mode:'body', parse:parseCtbcBillBody },
     ];
 
     // ===== 同步主流程 =====
@@ -2719,6 +2733,19 @@
         const seenKeys = {};
         for (const src of BILL_SOURCES) {
           if (!isEnabled(src.bank, 'bill')) continue;
+          if (src.mode === 'body') {
+            // 金額在信件本文，不需 PDF 密碼
+            const bmsgs = await gmailSearch('from:'+src.sender+' '+dateFilter);
+            for (const msg of bmsgs) {
+              const md = await fetchMsg(msg.id); if(!md) continue;
+              const bill = src.parse(extractBody(md.payload), new Date(parseInt(md.internalDate)));
+              if (bill && bill.bill_date) {
+                const key = src.bank + '_' + bill.bill_date.slice(0,7);
+                if (!existingBills.has(key) && !seenKeys[key]) { seenKeys[key]=true; billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0,'未繳',key]); }
+              }
+            }
+            continue;
+          }
           const pw = sessionPasswords[src.bank] || '';
           if (!pw) { missingPw.push(src.bank); continue; }
           const msgs = await gmailSearch('from:'+src.sender+' has:attachment filename:pdf ' + dateFilter);
