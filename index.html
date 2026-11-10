@@ -161,10 +161,16 @@
     .tab { background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 12px; color: #aab; font-size: 11px; }
     .tab.active { color: #00897b; font-weight: 700; }
     .tab svg { width: 22px; height: 22px; }
-    /* 廣告版位（固定在 tabbar 上方，扁平貼底、不浮動） */
-    .ad-banner { position: fixed; bottom: 62px; left: 0; right: 0; max-width: 480px; margin: 0 auto; height: 72px; z-index: 49; display: none; background: #fff; border-top: 1px solid #e5ecea; }
-    .ad-banner img { width: 100%; height: 100%; display: block; object-fit: cover; cursor: pointer; }
-    .app.has-banner { padding-bottom: 144px; }
+    /* 分頁說明卡 */
+    .intro-card { background: #fff; border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 4px 16px rgba(0,60,50,0.06); border-left: 4px solid #00897b; }
+    .intro-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 700; color: #00897b; margin-bottom: 6px; }
+    .intro-close { background: none; border: none; color: #bbc; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; }
+    .intro-desc { font-size: 13px; color: #456; line-height: 1.7; }
+    .intro-src-label { font-size: 12px; color: #9aa; margin: 10px 0 6px; }
+    .intro-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .intro-chip { font-size: 12px; padding: 3px 10px; border-radius: 20px; background: #e8f5f3; color: #00897b; }
+    .intro-chip.warn { background: #fff4e0; color: #c77700; }
+    .intro-go { margin-top: 12px; background: none; border: 1px solid #00897b; color: #00897b; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
     /* status */
     .status { text-align: center; padding: 8px; font-size: 13px; color: #7a8a87; }
     .status.ok { color: #2e7d32; } .status.err { color: #c62828; }
@@ -210,7 +216,7 @@
     <!-- 主畫面（登入後顯示） -->
     <div id="mainView" style="display:none;">
       <div class="header">
-        <h1 id="pageTitle">消費</h1>
+        <h1 id="pageTitle">帳單</h1>
         <div class="header-actions">
           <button class="btn-add" id="quickAddBtn">✏️ 記帳</button>
           <button class="btn-sync" id="syncBtn">🔄 同步</button>
@@ -223,8 +229,6 @@
     <!-- 底部頁籤（登入後顯示） -->
     <div class="tabbar" id="tabbar" style="display:none;"></div>
 
-    <!-- 廣告版位 -->
-    <div class="ad-banner" id="adBanner"><img id="adBannerImg" alt="" /></div>
 
     <!-- 設定頁（覆蓋，預設隱藏） -->
     <div id="settingsView" style="display:none;">
@@ -271,15 +275,6 @@
       <div id="prefSettingContent"></div>
     </div>
 
-    <!-- 信用卡預估子頁 -->
-    <div id="cardEstView" style="display:none;">
-      <div class="settings-head">
-        <button class="btn-back" id="cardEstBackBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M15 18l-6-6 6-6"/></svg></button>
-        <h1>信用卡預估</h1>
-      </div>
-      <div id="cardEstContent"></div>
-    </div>
-
     <!-- 我的銀行子頁 -->
     <div id="myBanksView" style="display:none;">
       <div class="settings-head">
@@ -292,8 +287,6 @@
 
   <script>
     const CLIENT_ID = '38899840747-fnjc7o4p6vscflgjftvmt6q4is03fjeb.apps.googleusercontent.com';
-    // iOS App Store 網址：上架後填入，全站「下載 App」共用此常數。留空時顯示「即將上架」
-    const IOS_APP_URL = '';
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     const SCOPES = [
       'https://www.googleapis.com/auth/drive.file',
@@ -304,8 +297,8 @@
 
     // 頁籤定義（之後可由 _config 控制顯示哪些）
     const TABS = [
-      { key: 'cashflow', label: '總覽', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></svg>' },
       { key: 'bills', label: '帳單', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>' },
+      { key: 'cashflow', label: '總覽', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="7"/><rect x="12" y="6" width="3" height="11"/><rect x="17" y="13" width="3" height="4"/></svg>' },
       { key: 'expenses', label: '消費', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>' },
       { key: 'invoices', label: '發票', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>' },
       { key: 'accounts', label: '帳戶', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7h18v12H3z"/><path d="M16 12h.01M3 7l2-4h14l2 4"/></svg>' },
@@ -452,8 +445,8 @@
       return QA_BANKS; // 未設定用預設
     }
 
-    // 偏好（總覽顏色 / emoji / 帳單預估）
-    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋', billEstimate:false, closingDays:{}, estDismissed:{} };
+    // 偏好（總覽顏色 / emoji）
+    const DEFAULT_PREFS = { incColor:'#ef5350', expColor:'#26a69a', emojiHigh:'😱', emojiMid:'🤔', emojiLow:'🤗', thresholdHigh:70, thresholdLow:50, welcomeMsg:'歡迎回來 👋' };
     let prefs = { ...DEFAULT_PREFS };
     async function loadPrefs() {
       if (!spreadsheetId) return;
@@ -473,7 +466,7 @@
       setContent('<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:55vh;text-align:center;">'
         + '<div style="font-size:26px;font-weight:700;line-height:1.5;padding:0 24px;word-break:break-word;">' + String(msg).replace(/</g,'&lt;') + '</div>'
         + '<div style="margin-top:14px;font-size:13px;color:#9ab;opacity:.7;">資料載入中…</div>'
-        + '</div>');
+        + '</div>', true);
     }
     async function savePrefs() {
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A4:B4?valueInputOption=RAW',
@@ -520,7 +513,7 @@
         Object.keys(localStorage).forEach(k => { if (k.startsWith('imrich_cache_')) localStorage.removeItem(k); });
       } catch(e) {}
     }
-    let currentTab = 'expenses';
+    let currentTab = 'bills';
     let expensesData = [];
     let billsData = [];
     let accountsData = [];
@@ -568,11 +561,9 @@
             await loadCategoryRules();
             await loadCatOrder();
             renderTabs();
-            loadBanner();
             await loadAndRender();
-            if (myBanks === null) showOnboarding(); // 新用戶引導
           } catch (err) {
-            setContent('<div class="empty">初始化失敗：' + (err && err.message ? err.message : '請重新整理再登入一次') + '</div>');
+            setContent('<div class="empty">初始化失敗：' + (err && err.message ? err.message : '請重新整理再登入一次') + '</div>', true);
           }
         },
       });
@@ -583,11 +574,9 @@
     document.getElementById('settingsBtn').onclick = () => openSettings();
     document.getElementById('backBtn').onclick = () => closeSettings();
 
-    let bannerActive = false;
     function openSettings() {
       document.getElementById('mainView').style.display = 'none';
       document.getElementById('tabbar').style.display = 'none';
-      document.getElementById('adBanner').style.display = 'none';
       document.getElementById('settingsView').style.display = 'block';
       renderSettings();
     }
@@ -595,16 +584,16 @@
       document.getElementById('settingsView').style.display = 'none';
       document.getElementById('mainView').style.display = 'block';
       document.getElementById('tabbar').style.display = 'flex';
-      if (bannerActive) document.getElementById('adBanner').style.display = 'block';
     }
 
     function renderSettings() {
       const html = `
+        ${settingsTipHtml()}
         <div class="setting-section">
           <h2>資料同步</h2>
           <div class="setting-card">
             <div class="setting-item" onclick="openMyBanksSetting()">
-              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與餘額，可隨時手動校正更新</div></div>
+              <div><div class="label">資產設定</div><div class="sub">管理你的帳戶清單與餘額</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openBankSetting()">
@@ -615,17 +604,13 @@
               <div><div class="label">分類規則</div><div class="sub">依照發票明細店家關鍵字自動分類消費</div></div>
               <span class="arrow">›</span>
             </div>
-            <div class="setting-item" onclick="openCardEstSetting()">
-              <div><div class="label">信用卡預估</div><div class="sub">依結帳日累計當期消費，帳單頁顯示預估金額</div></div>
-              <span class="arrow">›</span>
-            </div>
           </div>
         </div>
         <div class="setting-section">
           <h2>安全</h2>
           <div class="setting-card">
-            <div class="setting-item" onclick="showAppOnlyFeature('App 鎖')">
-              <div><div class="label">App 鎖</div><div class="sub">生物辨識 / PIN 解鎖（App 版）</div></div>
+            <div class="setting-item" onclick="alert('App 鎖：Face ID / PIN（開發中）')">
+              <div><div class="label">App 鎖</div><div class="sub">生物辨識 / PIN 解鎖</div></div>
               <span class="arrow">›</span>
             </div>
           </div>
@@ -633,8 +618,8 @@
         <div class="setting-section">
           <h2>通知與偏好</h2>
           <div class="setting-card">
-            <div class="setting-item" onclick="showAppOnlyFeature('帳單提醒通知')">
-              <div><div class="label">通知</div><div class="sub">帳單截止前提醒（App 版）</div></div>
+            <div class="setting-item" onclick="alert('通知提醒時間（開發中）')">
+              <div><div class="label">通知</div><div class="sub">設定本地提醒時間，或帳單日出爐時提醒</div></div>
               <span class="arrow">›</span>
             </div>
             <div class="setting-item" onclick="openTabSetting()">
@@ -654,25 +639,6 @@
               <div><div class="label">聯繫客服 / 回報問題</div><div class="sub">遇到 bug 或有建議都歡迎</div></div>
               <span class="arrow">›</span>
             </div>
-          </div>
-        </div>
-        <div class="setting-section">
-          <h2>關於</h2>
-          <div class="setting-card">
-            <div class="setting-item" onclick="openAbout()">
-              <div><div class="label">關於 YouOwn</div><div class="sub">為什麼會有這個 App</div></div>
-              <span class="arrow">›</span>
-            </div>
-            <div class="setting-item" onclick="openDownloadApp()">
-              <div><div class="label">下載 iOS App</div><div class="sub">App 版支援 App 鎖、帳單提醒通知等功能</div></div>
-              <span class="arrow">›</span>
-            </div>
-            <!-- === 綠界贊助（iOS App 版需整段移除，改用 IAP；不可用 runtime 隱藏，須實際刪除避免 Apple 審查抓到外部付款）=== -->
-            <div class="setting-item" onclick="openDonate()">
-              <div><div class="label">請我喝杯咖啡 ☕</div><div class="sub">YouOwn 目前沒有收費計畫，你的支持是動力</div></div>
-              <span class="arrow">›</span>
-            </div>
-            <!-- === 綠界贊助結束 === -->
           </div>
         </div>
         <div class="setting-section">
@@ -697,68 +663,6 @@
       const body = encodeURIComponent('請描述你遇到的問題或建議：\n\n\n---\n（以下資訊有助於我們排查，可保留）\n裝置：\n瀏覽器：' + navigator.userAgent);
       window.location.href = 'mailto:' + email + '?subject=' + subject + '&body=' + body;
     }
-
-    // 關於 YouOwn（開發者敘事，動態覆蓋層）
-    // 共用「下載 iOS App」：有網址就跳 App Store，沒有就提示即將上架
-    function openDownloadApp() {
-      if (IOS_APP_URL) { window.open(IOS_APP_URL, '_blank', 'noopener,noreferrer'); }
-      else { showToast('iOS App 即將上架，敬請期待 📱'); }
-    }
-    // App 版限定功能：網頁版不支援，導向下載 App
-    function showAppOnlyFeature(name) {
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = '<div class="qa-panel">'
-        + '<div style="text-align:center;font-size:36px;margin-bottom:8px;">📱</div>'
-        + '<div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:10px;">' + esc(name) + '需要 App 版</div>'
-        + '<div style="text-align:center;font-size:14px;color:#7a8a87;line-height:1.7;margin-bottom:20px;">此功能網頁版不支援，請下載 iOS App 使用。</div>'
-        + '<button id="aofGo" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">下載 iOS App</button>'
-        + '<button id="aofClose" style="width:100%;background:none;color:#99a;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;">關閉</button>'
-        + '</div>';
-      document.body.appendChild(overlay);
-      document.getElementById('aofGo').onclick = () => { overlay.remove(); openDownloadApp(); };
-      document.getElementById('aofClose').onclick = () => overlay.remove();
-    }
-    function openAbout() {
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = '<div class="qa-panel">'
-        + '<div style="text-align:center;font-size:19px;font-weight:700;margin-bottom:18px;">關於 YouOwn</div>'
-        + '<div style="font-size:14px;color:#3a4a47;line-height:1.85;">'
-        + '<p style="margin:0 0 14px;">我是一個獨立開發者。做 YouOwn 之前，我跟很多人一樣用市面上的記帳 App，但總覺得哪裡不對——想用自動同步，就得把銀行帳密交給對方；想用完整功能，又常常要每個月付費。</p>'
-        + '<p style="margin:0 0 14px;">我不太想把自己的銀行帳密交給一個不知道會怎麼保管的服務，也不想為了記帳綁一份訂閱。所以我乾脆自己做一個來用。</p>'
-        + '<p style="margin:0 0 14px;">YouOwn 的做法不一樣：它不碰你的銀行帳密，而是讀你自己 Gmail 裡的銀行通知信；你的財務資料只存在你自己的 Google，我這邊看不到、也不留存。</p>'
-        + '<p style="margin:0 0 14px;">這個 App 是我自己每天在用的工具。如果它剛好也幫上了你，那就太好了。</p>'
-        + '<p style="margin:0;text-align:right;color:#7a8a87;">— YouOwn 開發者</p>'
-        + '</div>'
-        + '<button id="aboutClose" style="width:100%;margin-top:20px;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;">關閉</button>'
-        + '</div>';
-      document.body.appendChild(overlay);
-      document.getElementById('aboutClose').onclick = () => overlay.remove();
-    }
-
-    // === 綠界贊助（iOS App 版需整段移除，改用 IAP；不可 runtime 隱藏，須實際刪除）===
-    function openDonate() {
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = '<div class="qa-panel">'
-        + '<div style="text-align:center;font-size:40px;margin-bottom:8px;">☕</div>'
-        + '<div style="text-align:center;font-size:19px;font-weight:700;margin-bottom:10px;">請我喝杯咖啡</div>'
-        + '<div style="text-align:center;font-size:14px;color:#7a8a87;line-height:1.7;margin-bottom:20px;">YouOwn 目前沒有收費計畫。<br>如果它有幫上你，也歡迎請我喝杯咖啡，金額不限，你的支持是我維護下去的動力 🙏</div>'
-        + '<button id="donateGo" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-bottom:8px;">前往贊助</button>'
-        + '<button id="donateClose" style="width:100%;background:none;color:#99a;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:14px;cursor:pointer;">下次再說</button>'
-        + '</div>';
-      document.body.appendChild(overlay);
-      document.getElementById('donateGo').onclick = () => {
-        window.open('https://payment.ecpay.com.tw/Broadcaster/Donate/1D5CCC9588FEE268BA4928C0A7C7704C', '_blank', 'noopener,noreferrer');
-        overlay.remove();
-      };
-      document.getElementById('donateClose').onclick = () => overlay.remove();
-    }
-    // === 綠界贊助結束 ===
 
     // ===== 銀行設定子頁 =====
     document.getElementById('bankBackBtn').onclick = () => {
@@ -1149,72 +1053,12 @@
       };
     }
 
-    // ===== 信用卡預估子頁 =====
-    document.getElementById('cardEstBackBtn').onclick = () => {
-      document.getElementById('cardEstView').style.display = 'none';
-      document.getElementById('settingsView').style.display = 'block';
-    };
-    function openCardEstSetting() {
-      document.getElementById('settingsView').style.display = 'none';
-      document.getElementById('cardEstView').style.display = 'block';
-      renderCardEstSetting();
-    }
-    function renderCardEstSetting() {
-      const estBanks = [...new Set(expensesData.map(e => e.bank))].filter(b => b && b !== '現金');
-      let html = '<div class="bank-setting">';
-      html += '<div class="bank-block"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">'
-        + '<div style="font-weight:600;">帳單預估</div>'
-        + '<label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="checkbox" id="cardEstToggle"' + (prefs.billEstimate ? ' checked' : '') + ' style="width:18px;height:18px;accent-color:#00897b;cursor:pointer;" />啟用</label></div>'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:10px;line-height:1.7;">'
-        + '<div class="li-row">・設定結帳日，帳單頁顯示當期消費累計</div>'
-        + '<div class="li-row">・留空＝不預估該銀行</div>'
-        + '<div class="li-row">・名單來自有消費紀錄的帳戶（消費同步或手動記帳都算）</div>'
-        + '<div class="li-row">・本期沒有消費時，帳單頁不會顯示該行的預估卡</div>'
-        + '<div class="li-row" style="color:#e57373;">・僅供參考，實際以銀行帳單為準</div></div>';
-      if (estBanks.length) {
-        for (const b of estBanks) {
-          const v = (prefs.closingDays && prefs.closingDays[b]) || '';
-          html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
-            + '<span class="dot" style="background:' + getBankColor(b) + ';width:9px;height:9px;flex-shrink:0;"></span>'
-            + '<div style="flex:1;font-size:14px;">' + esc(b) + '</div>'
-            + '<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:#9aa;">每月</span>'
-            + '<input type="number" class="pref-closing-day" data-bank="' + esc(b) + '" value="' + v + '" min="1" max="31" placeholder="—" style="width:56px;padding:8px;border:1px solid #dde8e5;border-radius:8px;font-size:15px;text-align:center;" />'
-            + '<span style="font-size:12px;color:#9aa;">日結帳</span></div></div>';
-        }
-      } else {
-        html += '<div style="font-size:13px;color:#bbc;line-height:1.7;">預估是依你的消費紀錄累計的，目前還沒有任何消費，所以沒有銀行可設定。消費紀錄有兩個來源：到「設定 → 同步設定」開啟該銀行的<b>消費</b>同步，或直接用右上角「記帳」手動新增一筆消費——兩種都算，記完銀行就會出現在這裡。</div>';
-      }
-      html += '</div>';
-      html += '<button id="cardEstDoneBtn" style="width:100%;background:#00897b;color:#fff;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin:8px 0 24px;">完成</button>';
-      html += '</div>';
-      document.getElementById('cardEstContent').innerHTML = html;
-
-      document.getElementById('cardEstDoneBtn').onclick = async () => {
-        const cds = {};
-        let cdErr = false;
-        document.querySelectorAll('#cardEstContent .pref-closing-day').forEach(inp => {
-          if (inp.value === '') return;
-          const d = parseInt(inp.value, 10);
-          if (isNaN(d) || d < 1 || d > 31) { cdErr = true; return; }
-          cds[inp.dataset.bank] = d;
-        });
-        if (cdErr) { showToast('結帳日需為 1–31 的數字'); return; }
-        prefs.billEstimate = document.getElementById('cardEstToggle').checked;
-        prefs.closingDays = cds;
-        await savePrefs();
-        document.getElementById('cardEstView').style.display = 'none';
-        document.getElementById('settingsView').style.display = 'block';
-        showToast('信用卡預估已儲存');
-      };
-    }
-
     // ===== 我的銀行子頁 =====
     document.getElementById('myBanksBackBtn').onclick = () => {
       document.getElementById('myBanksView').style.display = 'none';
       document.getElementById('settingsView').style.display = 'block';
     };
     let pendingBalances = {}; // 資產設定頁暫存的餘額輸入
-    let showMoreBanks = false; // 資產設定頁：是否展開「更多銀行」（不可同步的）
     function collectBalInputs() {
       document.querySelectorAll('.bal-input').forEach(inp => {
         if (inp.value !== '') pendingBalances[inp.dataset.bank] = inp.value;
@@ -1223,7 +1067,6 @@
     }
     function openMyBanksSetting() {
       pendingBalances = {};
-      showMoreBanks = false;
       document.getElementById('settingsView').style.display = 'none';
       document.getElementById('myBanksView').style.display = 'block';
       renderMyBanksSetting();
@@ -1231,8 +1074,8 @@
     async function renderMyBanksSetting() {
       const current = new Set(myBanks || []);
       const syncable = new Set(BANKS_SUPPORT.map(b => b.name));
-      // 自訂帳戶（myBanks 中不在 TW_BANKS 的；現金已固定在 primary，不重複列出）
-      const customs = [...current].filter(b => !TW_BANKS.includes(b) && b !== '現金');
+      // 自訂帳戶（myBanks 中不在 TW_BANKS 的）
+      const customs = [...current].filter(b => !TW_BANKS.includes(b));
       // 讀現有餘額（預填）
       const accts = await getAccountsData();
       const balMap = {};
@@ -1240,34 +1083,18 @@
 
       let html = '<div class="bank-setting">';
       html += '<div class="info-banner">'
-        + '<div class="li-row">・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。</div>'
-        + '<div class="li-row">・沒有 ⚡ 的帳戶不會自動同步，但一樣可以手動記帳、隨時校正餘額。</div>'
-        + '<div class="li-row">・輸入<b>目前正確的餘額</b>作為起始金額。</div>'
-        + '<div class="li-row">・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。</div>'
+        + '・勾選你持有的帳戶，<b>⚡</b> 表示支援 Email 自動同步。<br>'
+        + '・輸入<b>目前正確的餘額</b>作為起始金額。<br>'
+        + '・同步後會依 Email 通知更新餘額；若部分交易沒有通知，可隨時修正餘額。'
         + '</div>';
-      // 銀行 chips：可同步的（+現金）優先顯示，其餘收在「更多銀行」後面，避免首屏被 30 家淹沒
-      const primary = [...TW_BANKS.filter(b => syncable.has(b)), '現金'];
-      const others = TW_BANKS.filter(b => !syncable.has(b) && b !== '現金');
-      // 已勾選但屬於「更多」區的，展開區預設打開，免得看起來像消失了
-      const hasSelectedInOthers = others.some(b => current.has(b));
-      const showOthers = showMoreBanks || hasSelectedInOthers;
-      const chip = (b) => {
+      // 銀行 chips
+      html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      for (const b of [...TW_BANKS, ...customs]) {
         const on = current.has(b);
         const canSync = syncable.has(b);
-        return '<button class="mybank-chip" data-bank="' + esc(b) + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + esc(b) + (canSync?' ⚡':'') + '</button>';
-      };
-      html += '<div class="bank-block"><div class="pw-label" style="margin-bottom:8px;">選擇帳戶</div><div style="display:flex;gap:8px;flex-wrap:wrap;">';
-      html += [...primary, ...customs].map(chip).join('');
+        html += '<button class="mybank-chip" data-bank="' + esc(b) + '" style="border:1px solid ' + (on?'#00897b':'#dde8e5') + ';background:' + (on?'#00897b':'#fff') + ';color:' + (on?'#fff':'#556') + ';border-radius:20px;padding:7px 13px;font-size:13px;cursor:pointer;font-weight:' + (on?'600':'400') + ';">' + (on?'✓ ':'') + esc(b) + (canSync?' ⚡':'') + '</button>';
+      }
       html += '</div>';
-      // 已勾選「更多」區銀行時該區固定展開（收起會讓已選項目看似消失），此時不顯示收合按鈕
-      if (!hasSelectedInOthers) {
-        html += '<button id="toggleMoreBanks" style="width:100%;margin-top:10px;background:none;border:1px dashed #dde8e5;color:#7a8a87;border-radius:10px;padding:9px;font-size:13px;cursor:pointer;">'
-          + (showOthers ? '收起其他銀行 ▲' : '更多銀行（' + others.length + '）▼') + '</button>';
-      }
-      if (showOthers) {
-        html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' + others.map(chip).join('') + '</div>'
-          + '<div style="font-size:11px;color:#bbc;margin-top:8px;">這些銀行目前無法自動同步，需要手動記帳。</div>';
-      }
       // 自訂新增
       html += '<div style="display:flex;gap:8px;margin-top:12px;">'
         + '<input id="customBankInput" class="pw-input" placeholder="自訂帳戶（如 股票、悠遊卡）" style="flex:1;margin:0;" />'
@@ -1298,12 +1125,6 @@
       html += '</div>';
       document.getElementById('myBanksContent').innerHTML = html;
 
-      const moreBtn = document.getElementById('toggleMoreBanks');
-      if (moreBtn) moreBtn.onclick = () => {
-        collectBalInputs();
-        showMoreBanks = !showMoreBanks;
-        renderMyBanksSetting();
-      };
       document.querySelectorAll('.mybank-chip').forEach(chip => {
         chip.onclick = () => {
           collectBalInputs();
@@ -1366,26 +1187,6 @@
           await saveBankColors();
           await upsertAccountBalances(balances, myBanks);
           writeCache('accounts', await loadAccounts());
-          // 首次引導：依「需求 × 勾選銀行的能力」自動配同步選項，接著帶去同步設定填密碼
-          if (onboardingNeeds) {
-            syncOptions = {};
-            for (const bankName of myBanks) {
-              const cap = BANKS_SUPPORT.find(b => b.name === bankName);
-              if (!cap) continue;
-              const o = {};
-              if (cap.account) o.account = true; // 有帳戶通知就開，讓餘額能自動更新
-              if (onboardingNeeds.expense && cap.expense) o.expense = true;
-              if (onboardingNeeds.bill && cap.bill) o.bill = true;
-              if (Object.keys(o).length) syncOptions[bankName] = o;
-            }
-            if (onboardingNeeds.invoice) syncOptions['發票'] = { enabled: true };
-            await saveSyncOptions();
-            onboardingNeeds = null;
-            document.getElementById('myBanksView').style.display = 'none';
-            showToast('已依你的選擇設定同步項目');
-            openBankSetting(); // 帶去同步設定確認 + 填 PDF 密碼
-            return;
-          }
           document.getElementById('myBanksView').style.display = 'none';
           document.getElementById('settingsView').style.display = 'block';
           showToast('資產設定已儲存');
@@ -1487,7 +1288,7 @@
         method: 'POST', headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'application/json' },
         body: JSON.stringify({ valueInputOption: 'RAW', data: [
           { range: 'expenses!A1:J1', values: [['日期','銀行','金額','備註','gmail_message_id','分類','狀態','發票明細','來源','排除']] },
-          { range: 'bills!A1:H1', values: [['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key','刪除']] },
+          { range: 'bills!A1:G1', values: [['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key']] },
           { range: 'transfers!A1:H1', values: [['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note']] },
           { range: 'invoices!A1:J1', values: [['日期','店名','金額','發票號碼','載具','統編','分類','狀態','配對消費','明細']] },
           { range: 'accounts!A1:B1', values: [['銀行','餘額']] },
@@ -1558,16 +1359,16 @@
 
     async function loadBills() {
       if (!spreadsheetId) return [];
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!A2:H100000',
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!A2:G100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
       const rows = data.values || [];
-      // [銀行, 結帳日, 繳款截止日, 應繳總額, 最低應繳, 狀態, key, 刪除]
+      // [銀行, 結帳日, 繳款截止日, 應繳總額, 最低應繳, 狀態, key]
       return rows.map(r => ({
         bank: r[0], bill_date: r[1], due_date: r[2],
         total_amount: parseInt(r[3]||'0',10), min_payment: parseInt(r[4]||'0',10),
-        status: r[5]||'未繳', key: r[6], deleted: (r[7]==='TRUE'||r[7]==='1')
-      })).filter(b => b.bank && b.key && !b.deleted); // 已標記刪除的不進畫面
+        status: r[5]||'未繳', key: r[6]
+      })).filter(b => b.bank && b.key);
     }
 
     // 日期輔助
@@ -1578,7 +1379,68 @@
       return Math.round((due - now) / 86400000);
     }
 
-    function setContent(html) { document.getElementById('content').innerHTML = html; }
+    // ===== 分頁說明卡 =====
+    const SETTINGS_TIP = { text: '💡 帳單小提示：填好各銀行 PDF 密碼，帳單才能自動抓取並提醒繳款', link: '' };
+    function settingsTipHtml() {
+      const t = esc(SETTINGS_TIP.text);
+      const inner = SETTINGS_TIP.link ? '<a href="' + esc(SETTINGS_TIP.link) + '" target="_blank" rel="noopener noreferrer" style="color:#00897b;text-decoration:none;">' + t + '</a>' : t;
+      return '<div style="margin:16px 16px 0;font-size:12px;color:#6a8a85;background:#e8f5f3;border-radius:10px;padding:9px 12px;line-height:1.6;">' + inner + '</div>';
+    }
+    const INTRO = {
+      bills:    { type:'bill',    desc:'自動從 Gmail 的信用卡電子帳單抓出應繳金額與繳款截止日，快到期會標色提醒，繳完可一鍵標記。' },
+      expenses: { type:'expense', desc:'信用卡刷卡通知自動記帳，也可手動記帳；可依分類規則歸類，並支援搜尋與篩選。' },
+      invoices: { type:'invoice', desc:'電子發票自動比對信用卡消費，補上店名與品項明細，並依分類規則歸類。' },
+      cashflow: { type:'overview',desc:'按月彙整收入與支出（消費、轉帳、卡費扣繳），一眼看出每月結餘。' },
+      accounts: { type:'account', desc:'管理各銀行帳戶餘額，並依 Email 轉帳通知自動更新；通知沒涵蓋的交易可手動校正。' },
+    };
+    function introSources(type) {
+      if (type === 'overview') return null;
+      if (type === 'invoice') return (syncOptions['發票'] && syncOptions['發票'].enabled) ? [{ name:'電子發票' }] : [];
+      const out = [];
+      for (const b of BANKS_SUPPORT) {
+        const o = syncOptions[b.name];
+        if (!o || !o[type]) continue;
+        const needPw = b.needPw && (type === 'bill' || (type === 'expense' && b.expense === 'PDF'));
+        out.push({ name: b.name, warn: needPw && !sessionPasswords[b.name] });
+      }
+      return out;
+    }
+    function introDismissed(tab) { try { return localStorage.getItem('youown_intro_' + tab) === '1'; } catch(e) { return false; } }
+    function introCard(tab, force) {
+      const info = INTRO[tab];
+      if (!info) return '';
+      if (!force && introDismissed(tab)) return '';
+      const src = introSources(info.type);
+      let srcHtml;
+      if (src === null) srcHtml = '<div class="intro-src-label">資料來自「消費」與「帳戶」的同步內容</div>';
+      else if (!src.length) srcHtml = '<div class="intro-src-label">目前沒有啟用同步來源，可到設定開啟</div>';
+      else srcHtml = '<div class="intro-src-label">目前同步</div><div class="intro-chips">'
+        + src.map(x => '<span class="intro-chip' + (x.warn ? ' warn' : '') + '">' + esc(x.name) + (x.warn ? ' · 需填 PDF 密碼' : '') + '</span>').join('') + '</div>';
+      return '<div class="intro-card"><div class="intro-head"><span>這頁是做什麼的</span>'
+        + (force ? '' : '<button class="intro-close" data-tab="' + tab + '">×</button>') + '</div>'
+        + '<div class="intro-desc">' + info.desc + '</div>' + srcHtml
+        + '<button class="intro-go">調整同步設定</button></div>';
+    }
+    function bindIntro() {
+      document.querySelectorAll('.intro-close').forEach(btn => {
+        btn.onclick = () => {
+          try { localStorage.setItem('youown_intro_' + btn.dataset.tab, '1'); } catch(e) {}
+          const card = btn.closest('.intro-card'); if (card) card.remove();
+        };
+      });
+      document.querySelectorAll('.intro-go').forEach(btn => {
+        btn.onclick = () => { openSettings(); openBankSetting(); };
+      });
+    }
+    function setContent(html, noIntro) {
+      let pre = '';
+      if (!noIntro && html.indexOf('class="status"') === -1) {
+        const force = html.indexOf('class="empty"') !== -1 || html.indexOf('class="placeholder"') !== -1;
+        pre = introCard(currentTab, force);
+      }
+      document.getElementById('content').innerHTML = pre + html;
+      bindIntro();
+    }
     function fmt(n) { return Number(n||0).toLocaleString('en-US'); }
     // HTML 轉義：所有來自信件內容/用戶輸入的文字進 innerHTML 前必須經過，防 stored XSS
     function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1595,7 +1457,7 @@
       t.textContent = msg;
       t.style.opacity = '1';
       clearTimeout(t._timer);
-      t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2200);
+      t._timer = setTimeout(() => { t.style.opacity = '0'; }, msg.length > 30 ? 4500 : 2200);
     }
 
     // ===== 消費頁 =====
@@ -1824,77 +1686,13 @@
     }
 
     // ===== 帳單頁 =====
-    // 依結帳日算「當期」與「上期」區間。當期：上次結帳日隔天 ～ 下次結帳日（含當天）。
-    // 結帳日超過當月天數時取月底（如設 31 遇 2 月 → 2/28-29）。回傳 YYYY-MM-DD 字串供與消費日期字串比較。
-    function closingPeriodFor(day) {
-      const dim = (y,m) => new Date(y, m+1, 0).getDate(); // m 為 0-based
-      const f = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-      const today = new Date();
-      const todayStr = f(today);
-      let cy = today.getFullYear(), cm = today.getMonth();
-      let closing = new Date(cy, cm, Math.min(day, dim(cy, cm)));
-      if (todayStr > f(closing)) { cm += 1; if (cm > 11) { cm = 0; cy += 1; } closing = new Date(cy, cm, Math.min(day, dim(cy, cm))); }
-      let py = cy, pm = cm - 1; if (pm < 0) { pm = 11; py -= 1; }
-      const prevClosing = new Date(py, pm, Math.min(day, dim(py, pm)));
-      const start = new Date(prevClosing.getTime() + 86400000);
-      // 上上期結帳日（＝上期起點的前一天）
-      let qy = py, qm = pm - 1; if (qm < 0) { qm = 11; qy -= 1; }
-      const prevPrevClosing = new Date(qy, qm, Math.min(day, dim(qy, qm)));
-      const prevStart = new Date(prevPrevClosing.getTime() + 86400000);
-      return { start: f(start), end: f(closing), prevStart: f(prevStart), prevEnd: f(prevClosing) };
-    }
-    function sumBankPeriod(bank, start, end) {
-      return expensesData.filter(e => e.bank === bank && !e.excluded && e.amount > 0
-        && e.date >= start && e.date <= end)
-        .reduce((s,e) => s + e.amount, 0);
-    }
-    function renderBillEstimates() {
-      if (!prefs.billEstimate || !prefs.closingDays) return '';
-      const banks = Object.keys(prefs.closingDays);
-      if (!banks.length) return '';
-      let cards = '';
-      for (const bank of banks) {
-        const period = closingPeriodFor(prefs.closingDays[bank]);
-        // 上期卡：結帳後、真帳單到達前的空窗期顯示「上期已結帳金額」。退場條件三選一（先到先贏）：
-        // 1) 該行已同步到截止日晚於上期結帳日的真帳單（自動接棒） 2) 使用者手動關閉（記住該期，下期會出新的）
-        // 3) 到下一個結帳日自然過期（本卡只算上一期，不依賴帳單同步——沒開帳單同步的人靠 2、3 退場）
-        const prevSum = sumBankPeriod(bank, period.prevStart, period.prevEnd);
-        const billArrived = billsData.some(b => b.bank === bank && b.due_date && b.due_date > period.prevEnd);
-        const dismissed = prefs.estDismissed && prefs.estDismissed[bank] === period.prevEnd;
-        if (prevSum > 0 && !billArrived && !dismissed) {
-          const prevEndStr = period.prevEnd.slice(5).replace('-','/');
-          cards += '<div class="bill-card" style="border-left:4px solid #b0bec5;opacity:0.85;position:relative;">'
-            + '<button class="est-dismiss" data-bank="' + esc(bank) + '" data-period="' + period.prevEnd + '" style="position:absolute;top:8px;right:10px;border:none;background:none;color:#b0bec5;font-size:16px;cursor:pointer;padding:2px 6px;">✕</button>'
-            + '<div class="bill-card-top"><div>'
-            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
-            + '<div class="bill-due" style="color:#b0bec5;">' + prevEndStr + ' 已結帳 · 帳單寄送中</div>'
-            + '</div><div style="padding-right:18px;"><div class="bill-amount" style="color:#78909c;">$' + fmt(prevSum) + '</div><div class="bill-tag">上期預估</div></div></div>'
-            + '</div>';
-        }
-        const sum = sumBankPeriod(bank, period.start, period.end);
-        // 本期累計 $0 不顯示：可能是這期沒刷（無資訊價值），也可能是該行消費根本沒同步來源（顯示 $0 會誤導）
-        if (sum > 0) {
-          const endStr = period.end.slice(5).replace('-','/');
-          cards += '<div class="bill-card" style="border-left:4px solid #90a4ae;opacity:0.92;">'
-            + '<div class="bill-card-top"><div>'
-            + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(bank) + ';width:9px;height:9px;"></span>' + esc(bank) + '</div>'
-            + '<div class="bill-due" style="color:#90a4ae;">' + endStr + ' 結帳 · 本期累計</div>'
-            + '</div><div><div class="bill-amount" style="color:#607d8b;">$' + fmt(sum) + '</div><div class="bill-tag">預估</div></div></div>'
-            + '</div>';
-        }
-      }
-      if (!cards) return '';
-      return '<div class="bill-section-title" style="color:#90a4ae;">📊 本期預估</div>' + cards
-        + '<div style="font-size:11px;color:#bbc;margin:2px 4px 14px;">依你設定的結帳日與已同步消費累計，僅供預估參考，實際金額請以銀行帳單為準。</div>';
-    }
     function renderBills() {
       const pending = billsData.filter(b => b.status !== '已繳' && b.total_amount > 0)
         .sort((a,b) => (a.due_date||'').localeCompare(b.due_date||''));
       const paid = billsData.filter(b => b.status === '已繳' && b.total_amount > 0)
         .sort((a,b) => (b.due_date||'').localeCompare(a.due_date||''));
 
-      let html = renderBillEstimates();
-      html += '<button id="addManualBill" style="width:100%;background:none;border:1px dashed #00897b;color:#00897b;border-radius:12px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:16px;">＋ 手動新增帳單</button>';
+      let html = '';
       if (pending.length) {
         html += '<div class="bill-section-title" style="color:#f44336;">⚠️ 待繳帳單</div>';
         for (const b of pending) {
@@ -1902,16 +1700,12 @@
           const urgentColor = days === null ? '#00897b' : days < 0 ? '#f44336' : days <= 3 ? '#ff9800' : '#00897b';
           const dueStr = b.due_date ? b.due_date.slice(5).replace('-','/') : '—';
           const daysStr = days === null ? '' : (days < 0 ? '逾期 ' + Math.abs(days) + ' 天' : '剩 ' + days + ' 天');
-          const isManual = (b.key||'').startsWith('manual_');
           html += '<div class="bill-card" style="border-left:4px solid ' + urgentColor + ';">'
             + '<div class="bill-card-top"><div>'
             + '<div class="bill-bank"><span class="dot" style="background:' + getBankColor(b.bank) + ';width:9px;height:9px;"></span>' + esc(b.bank) + '</div>'
             + '<div class="bill-due" style="color:' + urgentColor + ';">截止 ' + dueStr + (daysStr?' · '+daysStr:'') + '</div>'
-            + '</div><div><div class="bill-amount">$' + fmt(b.total_amount) + '</div><div class="bill-tag">' + (isManual?'手動':'PDF 帳單') + '</div></div></div>'
-            + '<div style="display:flex;gap:8px;">'
-            + '<button class="btn-paid" data-key="' + b.key + '" style="flex:1;">✓ 標記已繳</button>'
-            + '<button class="bill-delete" data-key="' + esc(b.key) + '" data-manual="' + (isManual?'1':'0') + '" style="flex:0 0 auto;margin-top:12px;padding:10px 14px;border-radius:10px;border:1px solid #f44336;background:none;color:#f44336;font-weight:600;cursor:pointer;font-size:14px;">刪除</button>'
-            + '</div>'
+            + '</div><div><div class="bill-amount">$' + fmt(b.total_amount) + '</div><div class="bill-tag">PDF 帳單</div></div></div>'
+            + '<button class="btn-paid" data-key="' + b.key + '">✓ 標記已繳</button>'
             + '</div>';
         }
       }
@@ -1919,105 +1713,18 @@
         const recent = paid.slice(0,3);
         const older = paid.slice(3);
         html += '<div class="bill-section-title" style="color:#aaa;margin-top:20px;">✅ 已繳帳單</div>';
-        const renderPaidRow = b => { const isM = (b.key||'').startsWith('manual_'); return '<div class="paid-row"><div><div class="pb-bank">' + esc(b.bank) + '</div>'
-          + '<div class="pb-date">' + (b.due_date||'') + '</div></div>'
-          + '<div style="display:flex;align-items:center;gap:8px;"><div style="font-weight:700;">$' + fmt(b.total_amount) + '</div>'
-          + '<button class="bill-restore" data-key="' + esc(b.key) + '" style="padding:4px 10px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;font-size:11px;cursor:pointer;white-space:nowrap;">還原未繳</button>'
-          + '<button class="bill-delete" data-key="' + esc(b.key) + '" data-manual="' + (isM?'1':'0') + '" style="padding:4px 10px;border-radius:8px;border:1px solid #f44336;background:none;color:#f44336;font-size:11px;cursor:pointer;white-space:nowrap;">刪除</button>'
-          + '</div></div>'; };
+        const renderPaidRow = b => '<div class="paid-row"><div><div class="pb-bank">' + esc(b.bank) + '</div>'
+          + '<div class="pb-date">' + (b.due_date||'') + '</div></div><div style="font-weight:700;">$' + fmt(b.total_amount) + '</div></div>';
         html += recent.map(renderPaidRow).join('');
         if (showOlderPaid) html += older.map(renderPaidRow).join('');
         if (older.length) html += '<div class="show-more" id="togglePaid">' + (showOlderPaid ? '收起' : '顯示更多（' + older.length + ' 筆）') + '</div>';
       }
-      if (!pending.length && !paid.length) html += '<div class="empty">還沒有帳單<br>按右上角「同步」抓取，或用上方「手動新增帳單」</div>';
+      if (!pending.length && !paid.length) html = '<div class="empty">還沒有帳單<br>按右上角「同步」抓取</div>';
 
       setContent(html);
       document.querySelectorAll('.btn-paid').forEach(btn => { btn.onclick = () => openPayDialog(btn.dataset.key); });
-      document.querySelectorAll('.est-dismiss').forEach(btn => { btn.onclick = async () => {
-        if (!prefs.estDismissed) prefs.estDismissed = {};
-        prefs.estDismissed[btn.dataset.bank] = btn.dataset.period;
-        await savePrefs();
-        renderBills();
-      }; });
-      document.querySelectorAll('.bill-restore').forEach(btn => { btn.onclick = async () => {
-        if (!confirm('把這筆帳單還原成「未繳」？它會回到待繳清單。\n\n（若當初標已繳時有記錄扣款，那筆扣款與餘額不會一起還原，需要的話請自行到帳戶調整。）')) return;
-        btn.disabled = true; btn.textContent = '處理中...';
-        try {
-          await setBillStatus(btn.dataset.key, '未繳'); // 只改狀態，不動餘額
-          billsData = await getBillsData(true);
-          showToast('已還原為未繳');
-          renderBills();
-        } catch (err) { showToast('還原失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; btn.textContent='還原未繳'; }
-      }; });
       const toggle = document.getElementById('togglePaid');
       if (toggle) toggle.onclick = () => { showOlderPaid = !showOlderPaid; renderBills(); };
-      const addBtn = document.getElementById('addManualBill');
-      if (addBtn) addBtn.onclick = () => openAddBillDialog();
-      document.querySelectorAll('.bill-delete').forEach(btn => { btn.onclick = async () => {
-        if (!confirm('確定刪除這筆帳單？')) return;
-        btn.disabled = true; btn.textContent = '刪除中...';
-        try {
-          await deleteBillByKey(btn.dataset.key);
-          billsData = await getBillsData(true);
-          showToast('已刪除');
-          renderBills();
-        } catch (err) { showToast('刪除失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; btn.textContent='刪除'; }
-      }; });
-    }
-
-    // ===== 手動新增帳單 =====
-    function openAddBillDialog() {
-      const banks = (myBanks && myBanks.length) ? myBanks : TW_BANKS;
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      overlay.innerHTML = '<div class="qa-panel">'
-        + '<div style="text-align:center;font-size:18px;font-weight:700;margin-bottom:16px;">手動新增帳單</div>'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:4px;">銀行</div>'
-        + '<select id="abBank" style="width:100%;padding:12px;border:1px solid #dde8e5;border-radius:10px;font-size:15px;margin-bottom:12px;background:#fff;">'
-        + banks.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('') + '</select>'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:4px;">應繳總額 *</div>'
-        + '<input id="abAmount" type="number" inputmode="numeric" placeholder="例如 12000" style="width:100%;padding:12px;border:1px solid #dde8e5;border-radius:10px;font-size:15px;margin-bottom:12px;" />'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:4px;">繳款截止日 *</div>'
-        + '<input id="abDue" type="date" style="width:100%;padding:12px;border:1px solid #dde8e5;border-radius:10px;font-size:15px;margin-bottom:12px;" />'
-        + '<div style="font-size:12px;color:#9aa;margin-bottom:4px;">最低應繳（可留空）</div>'
-        + '<input id="abMin" type="number" inputmode="numeric" placeholder="可留空" style="width:100%;padding:12px;border:1px solid #dde8e5;border-radius:10px;font-size:15px;margin-bottom:20px;" />'
-        + '<div class="qa-btns"><button id="abCancel" style="flex:1;border:1px solid #ddd;background:none;">取消</button>'
-        + '<button id="abSave" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">新增</button></div>'
-        + '</div>';
-      document.body.appendChild(overlay);
-      document.getElementById('abCancel').onclick = () => overlay.remove();
-      document.getElementById('abSave').onclick = async () => {
-        const bank = document.getElementById('abBank').value;
-        const amount = parseInt(document.getElementById('abAmount').value, 10);
-        const due = document.getElementById('abDue').value;
-        const min = parseInt(document.getElementById('abMin').value, 10) || 0;
-        if (!bank || !amount || amount <= 0) { showToast('請填銀行與應繳總額'); return; }
-        if (!due) { showToast('請填繳款截止日'); return; }
-        const saveBtn = document.getElementById('abSave');
-        saveBtn.disabled = true; saveBtn.textContent = '新增中...';
-        try {
-          await ensureBillsSheet();
-          // 手動帳單 key 用 manual_ 前綴：與自動帳單（銀行_年月）區分，不互相去重、可刪除
-          const key = 'manual_' + bank + '_' + Date.now();
-          // 結帳日留空、狀態未繳。欄位：[銀行,結帳日,繳款截止日,應繳總額,最低應繳,狀態,key]
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[bank,'',due,amount,min,'未繳',key]]})});
-          billsData = await getBillsData(true);
-          overlay.remove();
-          showToast('已新增帳單');
-          renderBills();
-        } catch (err) { showToast('新增失敗：' + (err && err.message ? err.message : '請再試一次')); saveBtn.disabled=false; saveBtn.textContent='新增'; }
-      };
-    }
-    // 刪除帳單（靠 key 找行整列刪）。只給手動帳單用（呼叫端已限定 manual_ 開頭）
-    // 標記帳單為刪除（H 欄）。軟刪除：整行留著、key 依然存在，同步時會直接跳過，不會復活
-    async function deleteBillByKey(key) {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A2:H100000',{headers:{'Authorization':'Bearer '+accessToken}});
-      const rows = (await res.json()).values || [];
-      let rowNum = -1;
-      rows.forEach((r,i) => { if (r[6] === key) rowNum = i + 2; });
-      if (rowNum < 0) return;
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!H'+rowNum+'?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['TRUE']]})});
     }
 
     function openPayDialog(key) {
@@ -2078,9 +1785,7 @@
       renderPayDialog();
     }
 
-    async function markBillPaid(key) { return setBillStatus(key, '已繳'); }
-    // 改帳單狀態（F 欄）。只改狀態，不動餘額——標已繳/還原都不涉及扣款（扣款是繳款對話框「記錄扣款」另外處理）
-    async function setBillStatus(key, status) {
+    async function markBillPaid(key) {
       const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!A2:G100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
@@ -2089,7 +1794,7 @@
       rows.forEach((r, i) => { if (r[6] === key) rowNum = i + 2; });
       if (rowNum < 0) return;
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/bills!F' + rowNum + '?valueInputOption=RAW',
-        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [[status]] }) });
+        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['已繳']] }) });
     }
 
     // ===== 帳戶頁 =====
@@ -2104,88 +1809,14 @@
     }
 
     async function loadTransfersForBank(bank) {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:J100000',
+      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:G100000',
         { headers: { 'Authorization': 'Bearer ' + accessToken } });
       const data = await res.json();
       return (data.values || [])
-        .map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10), gmail_id:r[6]||'', note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1'), pair_id:r[9]||'' }))
+        .map(r => ({ date:r[0], bank:r[1], type:r[2], from:r[3], to:r[4], amount:parseInt(r[5]||'0',10) }))
         .filter(t => t.bank === bank)
-        .sort((a,b) => (b.date||'').localeCompare(a.date||''));
-    }
-    // 是否為手動記錄（gmail_id 以 manual_ 開頭）
-    function isManualTransfer(t) { return (t.gmail_id||'').startsWith('manual_'); }
-    // 設定某筆轉帳的隱藏狀態（I 欄）。只改標記，不動餘額——錢已在記帳/同步時反映
-    async function setTransferHidden(row, hidden) {
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I'+row+'?valueInputOption=RAW',
-        {method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[hidden?'TRUE':'']]})});
-    }
-
-    // ===== 刪除手動轉帳（含互轉成對處理）=====
-    // 讀全表（找配對可能在別家帳戶）。回傳帶 row/gmail_id/pair_id 的完整列
-    async function loadAllTransfersFull() {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A2:J100000',{headers:{'Authorization':'Bearer '+accessToken}});
-      const d = await res.json();
-      return (d.values||[]).map((r,i)=>({ row:i+2, date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), gmail_id:r[6]||'', note:r[7]||'', pair_id:r[9]||'' })).filter(t=>t.date);
-    }
-    // 找某筆的互轉配對對象（pair_id 優先，fallback：手動互轉 _out/_in 前綴、舊事後配對同日同額反向 note 相同）
-    function findPairPartner(t, all) {
-      if (t.pair_id) return all.find(x => x.row !== t.row && x.pair_id === t.pair_id) || null;
-      const gid = t.gmail_id || '';
-      const mm = gid.match(/^(manual_\d+)_(out|in)$/);
-      if (mm) { const base = mm[1], other = mm[2]==='out'?'in':'out'; return all.find(x => x.gmail_id === base+'_'+other) || null; }
-      // 舊事後配對：note 含互轉但無 pair_id、無前綴 → 同日同額、方向相反、note 相同
-      if ((t.note||'').includes('互轉')) {
-        const wantType = ['轉入','收入'].includes(t.type) ? '轉出' : '轉入';
-        return all.find(x => x.row !== t.row && x.date === t.date && Number(x.amount) === Number(t.amount) && x.type === wantType && x.note === t.note) || null;
-      }
-      return null;
-    }
-    // 刪除一列
-    async function deleteTransferRow(row) {
-      const meta = await fetchSheetMeta();
-      const sheet = meta.sheets.find(s => s.properties.title === 'transfers');
-      if (!sheet) return;
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{deleteDimension:{range:{sheetId:sheet.properties.sheetId,dimension:'ROWS',startIndex:row-1,endIndex:row}}}]})});
-    }
-    // 清除某筆的互轉標記（同步配對筆用：不刪、還原成普通轉帳，重新計入現金流）
-    async function clearMutualMark(row) {
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
-        { range:'transfers!H'+row, values:[['']] },
-        { range:'transfers!J'+row, values:[['']] }
-      ]})});
-    }
-    // 一筆轉帳對餘額的影響（刪除時要反向還原）：轉入/收入為 +，轉出/提款/提領為 -
-    function transferDelta(t) {
-      if (['轉入','收入'].includes(t.type)) return t.amount;
-      if (['轉出','提款','提領'].includes(t.type)) return -t.amount;
-      return 0;
-    }
-    // 刪除手動轉帳主流程。t 為 loadTransfersForBank 的一列（含 row/type/pair_id/gmail_id）
-    async function deleteTransferFull(t) {
-      const all = await loadAllTransfersFull();
-      const partner = findPairPartner(t, all);
-      // 要刪的列 + 餘額還原（反向 delta）
-      const rowsToDelete = [];
-      const balanceDeltas = {};
-      const addDel = (x) => { rowsToDelete.push(x.row); balanceDeltas[x.bank] = (balanceDeltas[x.bank]||0) - transferDelta(x); };
-      addDel(t);
-      if (partner) {
-        if (isManualTransfer(partner)) {
-          // 配對也是手動 → 成對刪，兩邊餘額都還原
-          addDel(partner);
-        } else {
-          // 配對是同步來的 → 不刪（會復活），改清互轉標記變回普通轉帳；它的餘額不動（本來就對）
-          await clearMutualMark(partner.row);
-        }
-      }
-      // 套用餘額還原
-      await applyBalanceDeltas(balanceDeltas);
-      // 刪列：由大到小刪，避免行號位移
-      rowsToDelete.sort((a,b)=>b-a);
-      for (const r of rowsToDelete) await deleteTransferRow(r);
-      writeCache('transfers', await loadAllTransfers());
-      writeCache('accounts', await loadAccounts());
-      return { deleted: rowsToDelete.length, clearedPartner: partner && !isManualTransfer(partner) };
+        .sort((a,b) => (b.date||'').localeCompare(a.date||''))
+        .slice(0, 10);
     }
 
     function renderAccounts() {
@@ -2201,10 +1832,7 @@
         return ia - ib;
       });
       const total = accountsData.reduce((s,a) => s + a.balance, 0);
-      let html = '<div class="total-card"><div style="display:flex;justify-content:space-between;align-items:flex-start;">'
-        + '<div><div class="tc-label">🔥 總資產</div><div class="tc-amount">$' + fmt(total) + '</div></div>'
-        + '<button id="linkTransfersBtn" style="background:rgba(255,255,255,0.2);border:none;border-radius:8px;padding:5px 11px;font-size:11px;color:#fff;font-weight:600;cursor:pointer;flex-shrink:0;">🔗 互轉配對</button>'
-        + '</div></div>';
+      let html = '<div class="total-card"><div class="tc-label">🔥 總資產</div><div class="tc-amount">$' + fmt(total) + '</div></div>';
 
       for (const a of sorted) {
         const neg = a.balance < 0;
@@ -2222,10 +1850,6 @@
         html += '</div>';
       }
       setContent(html);
-
-      // 互轉配對入口
-      const ltBtn = document.getElementById('linkTransfersBtn');
-      if (ltBtn) ltBtn.onclick = () => openLinkTransfers();
 
       // 校正按鈕
       document.querySelectorAll('.btn-fix').forEach(btn => {
@@ -2256,199 +1880,24 @@
           const trEl = document.getElementById('tr_' + bank);
           if (trEl.innerHTML) { trEl.innerHTML = ''; return; }
           trEl.innerHTML = '<div class="tr-row" style="opacity:.4;">載入中...</div>';
-          await renderBankTransfers(bank, trEl);
+          const transfers = await loadTransfersForBank(bank);
+          if (!transfers.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
+          const renderTrRows = (list) => list.map(t => {
+            const isIn = ['轉入','收入'].includes(t.type);
+            return '<div class="tr-row"><div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + '</div>'
+              + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
+          }).join('');
+          // 預設只顯示 5 筆，其餘收在「顯示更多」
+          if (transfers.length <= 5) {
+            trEl.innerHTML = renderTrRows(transfers);
+          } else {
+            trEl.innerHTML = renderTrRows(transfers.slice(0,5))
+              + '<div class="tr-row" id="trMore_' + esc(bank) + '" style="justify-content:center;color:#00897b;cursor:pointer;font-size:13px;">顯示更多（' + (transfers.length-5) + ' 筆）</div>';
+            const moreBtn = document.getElementById('trMore_' + bank);
+            if (moreBtn) moreBtn.onclick = () => { trEl.innerHTML = renderTrRows(transfers); };
+          }
         };
       });
-    }
-
-    // 渲染某帳戶的轉帳明細（可點開隱藏、已隱藏折疊找回）。狀態存在閉包裡，重繪不影響其他帳戶
-    async function renderBankTransfers(bank, trEl) {
-      const all = await loadTransfersForBank(bank);
-      if (!all.length) { trEl.innerHTML = '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有轉帳記錄</div>'; return; }
-      let expandedRow = null;    // 目前點開操作列的那筆 row
-      let showAllVisible = false; // 可見清單是否展開全部（預設 5 筆）
-      let showHidden = false;     // 是否展開已隱藏區
-
-      function rowHtml(t) {
-        const isIn = ['轉入','收入'].includes(t.type);
-        const opened = expandedRow === t.row;
-        let h = '<div class="tr-row tr-clickable" data-row="' + t.row + '" style="cursor:pointer;' + (t.hidden?'opacity:.45;':'') + '">'
-          + '<div class="tr-meta">' + esc(t.date?t.date.slice(5).replace('-','/'):'') + ' · ' + esc(t.type) + (t.note?' · '+esc(t.note):'') + '</div>'
-          + '<div class="tr-amount" style="color:' + (isIn?'#00897b':'#f44336') + ';">' + (isIn?'+':'-') + '$' + fmt(t.amount) + '</div></div>';
-        if (opened) {
-          const manual = isManualTransfer(t);
-          const isMutualRow = !!t.pair_id || /^manual_\d+_(out|in)$/.test(t.gmail_id||'') || (t.note||'').includes('互轉');
-          h += '<div style="padding:10px 16px 14px;background:#f7faf9;border-bottom:1px solid #f0f0f0;">'
-            + '<div style="font-size:11px;color:#9aa;line-height:1.6;margin-bottom:10px;">隱藏不影響帳戶餘額——這筆錢實際已反映在餘額中，只是不在總覽計入、也不顯示在明細。</div>'
-            + '<button class="tr-hide-toggle" data-row="' + t.row + '" data-hidden="' + (t.hidden?'1':'0') + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid ' + (t.hidden?'#00897b':'#dde8e5') + ';background:' + (t.hidden?'#00897b':'#fff') + ';color:' + (t.hidden?'#fff':'#556') + ';font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px;">' + (t.hidden?'✓ 已隱藏（點此取消）':'隱藏這筆') + '</button>';
-          if (manual) {
-            h += '<button class="tr-delete" data-row="' + t.row + '" style="width:100%;padding:9px;border-radius:8px;border:1px solid #f44336;background:none;color:#f44336;font-size:13px;font-weight:600;cursor:pointer;">刪除這筆' + (isMutualRow?'（互轉，含配對）':'') + '</button>';
-          } else {
-            h += '<div style="font-size:11px;color:#bbc;text-align:center;">同步進來的記錄無法刪除，可改用「隱藏」或到帳戶卡「校正」餘額</div>';
-          }
-          h += '</div>';
-        }
-        return h;
-      }
-
-      function render() {
-        const visible = all.filter(t => !t.hidden);
-        const hidden = all.filter(t => t.hidden);
-        let html = '';
-        const shownVisible = showAllVisible ? visible : visible.slice(0,5);
-        html += shownVisible.map(rowHtml).join('');
-        if (visible.length > 5 && !showAllVisible) {
-          html += '<div class="tr-row tr-more" style="justify-content:center;color:#00897b;cursor:pointer;font-size:13px;">顯示更多（' + (visible.length-5) + ' 筆）</div>';
-        }
-        if (!visible.length) html += '<div class="tr-row" style="opacity:.4;justify-content:center;">沒有顯示中的轉帳</div>';
-        if (hidden.length) {
-          html += '<div class="tr-row tr-hidden-toggle" style="justify-content:center;color:#aaa;cursor:pointer;font-size:13px;border-top:1px solid #f0f0f0;">' + (showHidden?'收起已隱藏 ▲':'顯示已隱藏（' + hidden.length + '）▼') + '</div>';
-          if (showHidden) html += hidden.map(rowHtml).join('');
-        }
-        trEl.innerHTML = html;
-
-        trEl.querySelectorAll('.tr-clickable').forEach(row => {
-          row.onclick = () => { const r = parseInt(row.dataset.row); expandedRow = (expandedRow===r)?null:r; render(); };
-        });
-        const more = trEl.querySelector('.tr-more');
-        if (more) more.onclick = () => { showAllVisible = true; render(); };
-        const ht = trEl.querySelector('.tr-hidden-toggle');
-        if (ht) ht.onclick = () => { showHidden = !showHidden; render(); };
-        trEl.querySelectorAll('.tr-hide-toggle').forEach(btn => {
-          btn.onclick = async (e) => {
-            e.stopPropagation();
-            const r = parseInt(btn.dataset.row);
-            const willHide = btn.dataset.hidden !== '1';
-            btn.disabled = true; btn.textContent = '處理中...';
-            try {
-              await setTransferHidden(r, willHide);
-              const t = all.find(x => x.row === r); if (t) t.hidden = willHide; // 更新本地
-              expandedRow = null;
-              writeCache('transfers', await loadAllTransfers()); // 讓總覽同步排除
-              render();
-              showToast(willHide ? '已隱藏' : '已取消隱藏');
-            } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; }
-          };
-        });
-        trEl.querySelectorAll('.tr-delete').forEach(btn => {
-          btn.onclick = async (e) => {
-            e.stopPropagation();
-            const r = parseInt(btn.dataset.row);
-            const t = all.find(x => x.row === r); if (!t) return;
-            btn.disabled = true; btn.textContent = '檢查中...';
-            let allFull, partner;
-            try {
-              allFull = await loadAllTransfersFull();
-              partner = findPairPartner(t, allFull);
-            } catch (err) { showToast('讀取失敗，請再試一次'); btn.disabled=false; btn.textContent='刪除這筆'; return; }
-            // 依配對類型給不同確認說明，讓使用者按確認前就知道會發生什麼
-            let msg;
-            if (partner && isManualTransfer(partner)) {
-              msg = '這是一筆互轉，會同時刪除配對的另一筆（' + partner.bank + ' ' + partner.type + '），兩邊餘額都會還原。確定刪除？';
-            } else if (partner) {
-              msg = '配對的另一筆是同步進來的記錄，無法刪除。刪除這筆後，那筆會轉回一般轉帳（重新計入收支）。確定刪除？';
-            } else {
-              msg = '確定刪除這筆記錄？餘額會一併還原。';
-            }
-            if (!confirm(msg)) { btn.disabled=false; render(); return; }
-            btn.textContent = '刪除中...';
-            try {
-              const res = await deleteTransferFull(t);
-              accountsData = await getAccountsData(true);
-              showToast(res.clearedPartner ? '已刪除，配對的同步記錄已轉回一般轉帳' : '已刪除');
-              renderAccounts();
-            } catch (err) { showToast('刪除失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled=false; btn.textContent='刪除這筆'; }
-          };
-        });
-      }
-      render();
-    }
-
-    // ===== 互轉配對（事後把「同日期同金額、一轉出一轉入」的兩筆標記成互轉）=====
-    // 只改兩筆的 note（寫成「互轉 A→B」），不動餘額——兩筆當初記帳時餘額已各自加減過，再動會重複。
-    // note 含「互轉」的轉帳，現金流會自動歸為灰色（見 loadCashflowData 的 isMutual 判斷）。
-    async function loadTransfersWithRow() {
-      const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A2:H100000',{headers:{'Authorization':'Bearer '+accessToken}});
-      const d = await res.json();
-      return (d.values||[]).map((r,i) => ({ row:i+2, date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'' })).filter(t => t.date);
-    }
-    function findMutualPairs(transfers) {
-      const clean = t => { const n = t.note || ''; return !n.includes('互轉') && !n.includes('卡費') && !n.includes('忽略互轉'); };
-      const outs = transfers.filter(t => t.type === '轉出' && clean(t));
-      const ins  = transfers.filter(t => t.type === '轉入' && clean(t));
-      const usedIn = new Set();
-      const pairs = [];
-      for (const out of outs) {
-        const match = ins.find(i => !usedIn.has(i.row) && i.date === out.date && Number(i.amount) === Number(out.amount));
-        if (match) { usedIn.add(match.row); pairs.push({ out, in: match }); }
-      }
-      return pairs;
-    }
-    function openLinkTransfers() {
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-      document.body.appendChild(overlay);
-      let pairs = [];
-      function shell(inner) {
-        return '<div class="qa-panel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">'
-          + '<div style="font-size:17px;font-weight:700;">🔗 互轉配對</div>'
-          + '<button id="ltClose" style="background:none;border:none;font-size:14px;color:#aaa;cursor:pointer;">關閉</button></div>'
-          + '<div style="font-size:12px;color:#9aa;margin-bottom:14px;line-height:1.6;">把「同一天、同金額、一轉出一轉入」的兩筆，標記為自己帳戶間的互轉。標記後不影響餘額，只會在總覽裡不計入收支。</div>'
-          + inner + '</div>';
-      }
-      function bindClose() { const c = document.getElementById('ltClose'); if (c) c.onclick = () => overlay.remove(); }
-      overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">載入中...</div>');
-      bindClose();
-      function renderList() {
-        if (!pairs.length) { overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">沒有可配對的互轉 🎉</div>'); bindClose(); return; }
-        let inner = '';
-        pairs.forEach((p, idx) => {
-          inner += '<div style="background:#f7faf9;border-radius:12px;padding:14px 16px;margin-bottom:10px;">'
-            + '<div style="font-size:13px;opacity:.5;margin-bottom:6px;">' + esc(p.out.date) + '</div>'
-            + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
-            + '<div style="font-size:14px;"><span class="dot" style="background:' + getBankColor(p.out.bank) + ';"></span>' + esc(p.out.bank) + ' → <span class="dot" style="background:' + getBankColor(p.in.bank) + ';"></span>' + esc(p.in.bank) + '</div>'
-            + '<div style="font-weight:700;">$' + fmt(p.out.amount) + '</div></div>'
-            + '<div style="display:flex;gap:8px;">'
-            + '<button class="lt-confirm" data-idx="' + idx + '" style="flex:1;padding:8px;border-radius:8px;border:none;background:#00897b;color:#fff;font-weight:600;cursor:pointer;font-size:13px;">確認互轉</button>'
-            + '<button class="lt-ignore" data-idx="' + idx + '" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:none;color:#aaa;cursor:pointer;font-size:13px;">忽略</button>'
-            + '</div></div>';
-        });
-        overlay.innerHTML = shell(inner);
-        bindClose();
-        overlay.querySelectorAll('.lt-confirm').forEach(btn => btn.onclick = () => confirmPair(parseInt(btn.dataset.idx), btn));
-        overlay.querySelectorAll('.lt-ignore').forEach(btn => btn.onclick = () => ignorePair(parseInt(btn.dataset.idx), btn));
-      }
-      async function confirmPair(idx, btn) {
-        const p = pairs[idx];
-        btn.disabled = true; btn.textContent = '處理中...';
-        try {
-          const note = '互轉 ' + p.out.bank + '→' + p.in.bank;
-          const pairId = 'pair_' + Date.now();
-          // note（H）標示互轉讓現金流歸灰；pair_id（J）建立硬關聯，供刪除時可靠成對處理
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
-            { range:'transfers!H'+p.out.row, values:[[note]] },
-            { range:'transfers!J'+p.out.row, values:[[pairId]] },
-            { range:'transfers!H'+p.in.row,  values:[[note]] },
-            { range:'transfers!J'+p.in.row,  values:[[pairId]] }
-          ]})});
-          pairs.splice(idx, 1);
-          writeCache('transfers', await loadAllTransfers());
-          renderList();
-        } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled = false; btn.textContent = '確認互轉'; }
-      }
-      async function ignorePair(idx, btn) {
-        const p = pairs[idx];
-        btn.disabled = true;
-        try {
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H'+p.out.row+'?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['忽略互轉']]})});
-          pairs.splice(idx, 1);
-          writeCache('transfers', await loadAllTransfers());
-          renderList();
-        } catch (err) { showToast('失敗：' + (err && err.message ? err.message : '請再試一次')); btn.disabled = false; }
-      }
-      loadTransfersWithRow().then(ts => { pairs = findMutualPairs(ts); renderList(); })
-        .catch(() => { overlay.innerHTML = shell('<div style="text-align:center;opacity:.4;padding:40px;">載入失敗，請關閉後再試</div>'); bindClose(); });
     }
 
     async function setAccountBalance(bank, balance) {
@@ -2489,7 +1938,6 @@
       // 轉帳 → 依 type + note 分大類
       for (const t of tr) {
         if (!t.date) continue;
-        if (t.hidden) continue; // 已隱藏：不計入總覽、也不列在明細（餘額不受影響，已在記帳/同步時反映）
         const mm = ensure(t.date.slice(0,7));
         const label = t.bank + ' · ' + (t.note || t.type);
         const item = { date:t.date, label, amount:t.amount };
@@ -2537,10 +1985,10 @@
     async function loadAllTransfers() {
       if (!spreadsheetId) return [];
       try {
-        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:I100000',
+        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/transfers!A2:H100000',
           { headers: { 'Authorization': 'Bearer ' + accessToken } });
         const data = await res.json();
-        return (data.values || []).map(r => ({ date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'', hidden:(r[8]==='TRUE'||r[8]==='1') })).filter(t => t.date);
+        return (data.values || []).map(r => ({ date:r[0], bank:r[1], type:r[2], amount:parseInt(r[5]||'0',10), note:r[7]||'' })).filter(t => t.date);
       } catch(e) { return []; }
     }
 
@@ -2684,9 +2132,7 @@
     let invShowMatched = false, invShowIgnored = false, invShowUnmatched = true, invExpandedId = null, invNearbyExp = [];
     function renderInvoices() {
       if (!invoicesData.length) {
-        setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步<br>或匯入從財政部平台下載的發票 CSV<br><br><button id="importInvBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;">匯入發票 CSV</button></div>');
-        const eb = document.getElementById('importInvBtn');
-        if (eb) eb.onclick = () => pickInvoiceCsv(eb);
+        setContent('<div class="empty">還沒有發票<br>到設定啟用「電子發票」並同步</div>');
         return;
       }
       const catMatch = (i) => !invCatFilter || (i.category || '待分類') === invCatFilter;
@@ -2696,9 +2142,7 @@
 
       let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">'
         + '<div class="inv-stat">未匹配（' + unmatched.length + '）· 已匹配（' + matched.length + '）· 忽略（' + ignored.length + '）</div>'
-        + '<div style="display:flex;gap:6px;flex-shrink:0;">'
-        + '<button id="importInvBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;">匯入</button>'
-        + '<button id="rematchBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;">重新匹配</button></div></div>';
+        + '<button id="rematchBtn" style="background:none;border:1px solid #00897b;color:#00897b;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0;">重新匹配</button></div>';
       // 分類篩選標籤列
       const invCats = ['', ...allCategories()];
       html += '<div class="cat-filter-row">' + invCats.map(c =>
@@ -2846,8 +2290,6 @@
       document.querySelectorAll('.inv-rule-trigger').forEach(el => {
         el.onclick = (ev) => { ev.stopPropagation(); showAddRulePanel(el.dataset.store, el.dataset.inv); };
       });
-      const impBtn = document.getElementById('importInvBtn');
-      if (impBtn) impBtn.onclick = () => pickInvoiceCsv(impBtn);
       const rmBtn = document.getElementById('rematchBtn');
       if (rmBtn) rmBtn.onclick = async () => {
         rmBtn.disabled = true; rmBtn.textContent = '匹配中...';
@@ -2992,6 +2434,7 @@
         currentTab = tabs[0].key;
         document.getElementById('pageTitle').textContent = tabs[0].label;
       }
+      document.getElementById('pageTitle').textContent = (TABS.find(t => t.key === currentTab) || tabs[0]).label;
       bar.innerHTML = tabs.map(t =>
         '<button class="tab' + (t.key===currentTab?' active':'') + '" data-key="' + t.key + '">' + t.icon + '<span>' + t.label + '</span></button>'
       ).join('');
@@ -3069,47 +2512,28 @@
     function parseTaishinBill(text){ const r={}; const roc=(y,mo,d)=>(parseInt(y)+1911)+'-'+mo+'-'+d; const b=text.match(/帳單結帳日\s+(\d{3})\/(\d{2})\/(\d{2})/); if(b)r.bill_date=roc(b[1],b[2],b[3]); const d=text.match(/繳款截止日\s+(\d{3})\/(\d{2})\/(\d{2})/); if(d)r.due_date=roc(d[1],d[2],d[3]); const t=text.match(/本期累計應繳金額\s+([\d,]+)/); if(t)r.total_amount=parseInt(t[1].replace(/,/g,''),10); const mi=text.match(/本期最低應繳金額\s+([\d,]+)/); if(mi)r.min_payment=parseInt(mi[1].replace(/,/g,''),10); if(r.total_amount===undefined)return null; return r; }
 
     // ===== 帳戶(存款/轉帳) parser =====
-    function parseSinopacTransfer(body){
-      // 永豐 DAWHO 即時轉帳通知真實格式（extractBody 壓成一行）：
-      // 「交易時間 2026/07/27 20:48:48 ... 轉出金額 9600 手續費 0 ...」欄位名+空白+值，無冒號無「元」
-      const d = body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/) || body.match(/(\d{4})\/(\d{2})\/(\d{2})/);
-      const a = body.match(/轉出金額\s*([\d,]+)/) || body.match(/轉入金額\s*([\d,]+)/) || body.match(/金額[：:]?\s*NT?\$?\s*([\d,]+)/);
-      if (!d || !a) return null;
-      // 有「轉出金額」為轉出、有「轉入金額」為轉入；預設轉出（DAWHO 登入後轉帳通知多為本人轉出）
-      const type = body.includes('轉入金額') ? '轉入' : '轉出';
-      const to = (body.match(/收款對象\s*([^\s]+)/) || [])[1] || '';
-      const from = (body.match(/轉出帳戶[^\d]*([\d\-X]+)/) || [])[1] || '';
-      const seq = (body.match(/交易序號\s*([A-Z0-9]+)/) || [])[1] || '';
-      return { date: d[1]+'-'+d[2]+'-'+d[3], bank:'永豐', type, from_account: type==='轉出'?from:'', to_account: type==='轉出'?to:'', amount: parseInt(a[1].replace(/,/g,''),10), seq };
-    }
+    function parseSinopacTransfer(body){ const d=body.match(/(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/金額[：:]\s*NT?\$?\s*([\d,]+)/)||body.match(/([\d,]+)\s*元/); const fm=body.match(/轉出帳號[：:]\s*(\S+)/); const tm=body.match(/轉入帳號[：:]\s*(\S+)/); const type=body.includes('轉出')?'轉出':'轉入'; if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'永豐',type,from_account:fm?fm[1]:'',to_account:tm?tm[1]:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
     function parseCtbcTransfer(body){ const d=body.match(/交易時間\s*(\d{4})\/(\d{2})\/(\d{2})/); const a=body.match(/交易金額\s*新臺幣\s*([\d,]+)/); const type=body.includes('提領')?'提領':(body.includes('轉出')?'轉出':'轉入'); const acc=body.match(/交易帳號\s*(\S+)/); if(!d||!a)return null; return {date:d[1]+'-'+d[2]+'-'+d[3],bank:'中信',type,from_account:acc?acc[1]:'',to_account:'',amount:parseInt(a[1].replace(/,/g,''),10)}; }
-    // 台新無卡提款：「設定通知」(有金額)+「交易結果通知」(證明有實際執行)兩封配對。
-    // 決策（2026/07）：結果通知的「提款結果：提款成功」字樣無法穩定從 MIME 內文提取（曾導致整批漏記），
-    // 改反向判斷——結果通知這封信的存在即代表有去 ATM 執行（未執行不會寄此信），內文含「失敗」才排除。
-    // 金額只存在設定通知中，故仍需兩封配對（同帳號、時間最近）。
+    // 台新無卡提款：需「設定通知」(有金額)配對「結果通知」(有成功與否)，兩者都有才記錄
     function parseTaishinSetup(body) {
       const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
       const amt = (body.match(/提款金額[：:]\s*\$?\s*([\d,]+)/)||[])[1];
       const t = (body.match(/有效時間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
-      // 設定失敗的通知不記（欄位間可能有空白，用 regex 容忍）
-      const ok = !/設定結果[：:]\s*失敗/.test(body);
-      if (!acct || !amt || !t || !ok) return null;
+      if (!acct || !amt || !t) return null;
       return { account: acct, amount: parseInt(amt.replace(/,/g,''),10), time: t };
     }
     function parseTaishinResult(body) {
       const acct = (body.match(/無卡提款帳號[：:]\s*([\d*]+)/)||[])[1];
       const t = (body.match(/時\s*間[：:]\s*(\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}:\d{2})/)||[])[1];
-      // 反向判斷：含「失敗」才視為失敗，否則視為成功（見上方決策註解）
-      const success = !body.includes('失敗');
+      const success = body.includes('提款結果：提款成功') || body.includes('提款結果:提款成功');
       if (!acct || !t) return null;
       return { account: acct, time: t, success };
     }
     async function syncTaishinAtmWithdrawals(dateFilter, existingTrIds) {
       const rows = [];
       const [setupMsgs, resultMsgs] = await Promise.all([
-        // 寄件人用網域比對（Gmail from: 為子字串匹配）：台新通知信寄件地址有子網域變體，寫死完整地址會漏抓
-        gmailSearch('from:taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
-        gmailSearch('from:taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
+        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款設定通知 ' + dateFilter),
+        gmailSearch('from:webmaster@taishinbank.com.tw subject:無卡提款交易結果通知 ' + dateFilter)
       ]);
       const setups = [];
       for (const msg of setupMsgs) {
@@ -3121,13 +2545,10 @@
         if (existingTrIds.has('taishin_atm_'+msg.id)) continue;
         const md = await fetchMsg(msg.id); if(!md) continue;
         const r = parseTaishinResult(extractBody(md.payload));
-        if (!r || !r.success) continue; // 提款失敗不記
-        // 找同帳號、時間最近的設定通知拿金額。限制設定時間須早於等於結果時間（兩封皆台新同系統時間戳，無時鐘誤差，不留容差），
-        // 否則「領完馬上再設定下一筆」時，下一筆設定可能在時間上更近而配錯金額
-        // 日期直接用原始斜線格式解析（YYYY/MM/DD HH:mm:ss 各瀏覽器皆支援；改成 dash+空格 Safari 會回 Invalid Date 導致排序失效）
-        const rt = new Date(r.time).getTime();
-        const match = setups.filter(s => s.account === r.account && new Date(s.time).getTime() <= rt)
-          .sort((a,b) => Math.abs(rt - new Date(a.time).getTime()) - Math.abs(rt - new Date(b.time).getTime()))[0];
+        if (!r || !r.success) continue; // 沒配對成功資訊或提款失敗，不記
+        // 找同帳號、時間最近（設定要早於或接近結果）的設定通知
+        const match = setups.filter(s => s.account === r.account)
+          .sort((a,b) => Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(a.time.replace(/\//g,'-'))) - Math.abs(new Date(r.time.replace(/\//g,'-'))-new Date(b.time.replace(/\//g,'-'))))[0];
         if (!match) continue; // 找不到對應金額，無法記錄
         const dateStr = r.time.slice(0,10).replace(/\//g,'-');
         rows.push([dateStr,'台新','提款','','',match.amount,'taishin_atm_'+msg.id]);
@@ -3166,146 +2587,6 @@
       return results;
     }
 
-    // ===== 財政部平台「自行下載」CSV（逗號分隔＋標題列，一列一品項，發票號碼重複多列）=====
-    function splitCsvLine(line) {
-      const out = []; let cur = '', inQ = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (inQ) {
-          if (ch === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else inQ = false; }
-          else cur += ch;
-        } else {
-          if (ch === '"') inQ = true;
-          else if (ch === ',') { out.push(cur); cur = ''; }
-          else cur += ch;
-        }
-      }
-      out.push(cur);
-      return out;
-    }
-    function csvNum(v) { const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '').trim()); return isNaN(n) ? 0 : n; }
-    function parseInvoiceTableCsv(text) {
-      const lines = text.replace(/\uFEFF/g, '').split(/\r?\n/).filter(l => l.trim());
-      if (lines.length < 2) return [];
-      const header = splitCsvLine(lines[0]);
-      const col = (kw) => header.findIndex(h => h.indexOf(kw) > -1);
-      const iNo = col('發票號碼'), iDate = col('發票日期'), iStatus = col('發票狀態');
-      const iStore = col('賣方名稱'), iTax = col('賣方統一編號'), iCarrier = col('載具');
-      const iItemAmt = col('消費明細_金額'), iItemName = col('消費明細_品名'), iAmt = col('發票金額');
-      if (iNo < 0 || iDate < 0) return [];
-      const map = {}, order = [], voided = {};
-      for (let li = 1; li < lines.length; li++) {
-        const c = splitCsvLine(lines[li]);
-        const no = (c[iNo] || '').trim();
-        if (!no || voided[no]) continue;
-        if (iStatus > -1 && (c[iStatus] || '').indexOf('作廢') > -1) { voided[no] = true; delete map[no]; continue; }
-        let inv = map[no];
-        if (!inv) {
-          const raw = (c[iDate] || '').replace(/\D/g, '');
-          let date = '';
-          if (raw.length === 8) date = raw.slice(0,4) + '-' + raw.slice(4,6) + '-' + raw.slice(6,8);
-          else if (raw.length === 7) date = (parseInt(raw.slice(0,3), 10) + 1911) + '-' + raw.slice(3,5) + '-' + raw.slice(5,7); // 民國年
-          if (!date) continue;
-          inv = map[no] = {
-            date, store: iStore > -1 ? (c[iStore] || '') : '', amount: iAmt > -1 ? csvNum(c[iAmt]) : 0,
-            invoice_no: no, carrier: iCarrier > -1 ? (c[iCarrier] || '') : '', tax_id: iTax > -1 ? (c[iTax] || '') : '',
-            items: [], _sum: 0, _hasItemAmt: false
-          };
-          order.push(inv);
-        }
-        const itemAmt = iItemAmt > -1 ? csvNum(c[iItemAmt]) : 0;
-        if (iItemAmt > -1 && (c[iItemAmt] || '').trim() !== '') { inv._sum += itemAmt; inv._hasItemAmt = true; }
-        if (iItemName > -1 && (c[iItemName] || '').trim()) inv.items.push({ name: (c[iItemName] || '').trim(), amount: itemAmt });
-      }
-      const results = order.filter(inv => !voided[inv.invoice_no]);
-      for (const inv of results) {
-        if (inv._hasItemAmt) inv.amount = Math.round(inv._sum * 100) / 100; // 每列金額是品項金額，總額用加總（含負數折扣列）
-        delete inv._sum; delete inv._hasItemAmt;
-        inv.detail = inv.store + '/' + inv.invoice_no + '：' + inv.items.map(it => it.name + '(' + it.amount + ')').join(' | ');
-      }
-      return results;
-    }
-    // 自動判斷格式：M|D 直線分隔（每月彙整信）或標題列逗號分隔（平台自行下載）
-    function parseAnyInvoiceCsv(text) {
-      const first = (text.replace(/\uFEFF/g, '').split(/\r?\n/).find(l => l.trim()) || '');
-      return first.indexOf('|') > -1 ? parseInvoiceCsv(text) : parseInvoiceTableCsv(text);
-    }
-
-    // ===== 發票匯入共用邏輯（信件同步 & 手動上傳共用）：去重 → 套規則 → 自動比對消費 → 寫入 =====
-    async function importParsedInvoices(parsedInvoices) {
-      await ensureInvoicesSheet();
-      await ensureCategoriesSheet();
-      await loadCategoryRules();
-      const existingInvNos = await getExistingInvoiceNos();
-      const seen = {}, fresh = [];
-      for (const inv of parsedInvoices) {
-        if (!inv.invoice_no || existingInvNos.has(inv.invoice_no) || seen[inv.invoice_no]) continue;
-        seen[inv.invoice_no] = true;
-        fresh.push(inv);
-      }
-      if (!fresh.length) return { added: 0, skipped: parsedInvoices.length };
-      // 讀所有消費做自動比對（金額+日期完全一致，一筆消費只配一次）
-      const allExp = await loadExpenses();
-      const availExp = allExp.filter(e => e.status !== '已匹配');
-      const invRows = [], expUpdates = [];
-      for (const inv of fresh) {
-        const cat = categoryForStore(inv.store) || '';
-        const mi = availExp.findIndex(e => Number(e.amount) === Number(inv.amount) && e.date === inv.date);
-        if (mi > -1) {
-          const match = availExp.splice(mi, 1)[0];
-          invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '已匹配', match.gmail_id, inv.detail]);
-          // 消費：套分類（只在待分類時）、明細、已匹配
-          expUpdates.push({ row: match.row, category: (cat && match.category === '待分類') ? cat : match.category, detail: inv.detail });
-        } else {
-          invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '未匹配', '', inv.detail]);
-        }
-      }
-      await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:invRows})});
-      if (expUpdates.length) {
-        const data = [];
-        for (const u of expUpdates) {
-          data.push({ range: 'expenses!F'+u.row, values: [[u.category]] });
-          data.push({ range: 'expenses!G'+u.row, values: [['已匹配']] });
-          data.push({ range: 'expenses!H'+u.row, values: [[u.detail]] });
-        }
-        for (let i = 0; i < data.length; i += 100) {
-          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(i,i+100)})});
-        }
-      }
-      return { added: invRows.length, skipped: parsedInvoices.length - fresh.length };
-    }
-
-    // ===== 手動上傳發票 CSV（給沒設定每月彙整信的用戶）=====
-    function pickInvoiceCsv(btn) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv,text/csv';
-      input.onchange = async () => {
-        const f = input.files && input.files[0];
-        if (!f) return;
-        const orig = btn.textContent;
-        btn.disabled = true; btn.textContent = '匯入中...';
-        try { await handleInvoiceCsvFile(f); }
-        catch (err) { showToast('匯入失敗：' + (err && err.message ? err.message : '請再試一次')); }
-        if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = orig; }
-      };
-      input.click();
-    }
-    async function handleInvoiceCsvFile(file) {
-      const buf = await file.arrayBuffer();
-      let text = new TextDecoder('utf-8').decode(buf);
-      if (text.indexOf('\uFFFD') > -1) { try { text = new TextDecoder('big5').decode(buf); } catch (e) {} } // 舊版下載檔可能是 Big5
-      const parsed = parseAnyInvoiceCsv(text);
-      if (!parsed.length) { showToast('無法解析此檔案，請確認是財政部電子發票 CSV'); return; }
-      const r = await importParsedInvoices(parsed);
-      // 刷新快取與記憶體
-      const [freshExp, freshInv] = await Promise.all([loadExpenses(), loadInvoices()]);
-      writeCache('expenses', freshExp); writeCache('invoices', freshInv);
-      expensesData = freshExp; invoicesData = freshInv;
-      showToast(r.added ? ('匯入完成：新增 ' + r.added + ' 張發票' + (r.skipped ? '，略過 ' + r.skipped + ' 張已存在' : '')) : ('沒有新發票（' + r.skipped + ' 張已存在）'));
-      renderInvoices();
-    }
-
     const ACCOUNT_SOURCES = [
       { bank:'永豐', query:'from:mma@sinopac.com', parse:parseSinopacTransfer },
       { bank:'中信', query:'from:bank.csc@inib.ctbcbank.com', parse:parseCtbcTransfer },
@@ -3341,6 +2622,7 @@
       const origText = syncBtn.textContent;
       const t0 = performance.now();
       let expAdded = 0, billAdded = 0, acctAdded = 0, invAdded = 0;
+      const missingPw = [];
 
       try {
         const lastSync = await getLastSync();
@@ -3399,15 +2681,11 @@
               if (existingTrIds.has(msg.id)) return;
               const md = await fetchMsg(msg.id); if(!md) return;
               const p = src.parse(extractBody(md.payload));
-              if (p) {
-                // 永豐等 parser 可能帶收款對象/序號 → 存進 note 方便辨識（尤其分辨轉給自己 vs 給別人）
-                const note = p.to_account ? ('轉給 ' + p.to_account + (p.seq?' ('+p.seq+')':'')) : (p.seq||'');
-                trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id,note]);
-              }
+              if (p) trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]);
             }));
           }
         }
-        // 台新無卡提款（設定通知拿金額＋結果通知證明有執行，配對成功才記，見 syncTaishinAtmWithdrawals 註解）
+        // 台新無卡提款（設定通知+結果通知配對，只有配對成功才記錄）
         if (isEnabled('台新', 'account')) {
           const taishinRows = await syncTaishinAtmWithdrawals(dateFilter, existingTrIds);
           trRows.push(...taishinRows);
@@ -3424,21 +2702,10 @@
         const existingBills = await getExistingBillKeys();
         const billRows = [];
         const seenKeys = {};
-        // 歷史帳單自動標已繳：繳款截止日在今天前 >60 天者視為歷史（60天＝放行最近一整期）。
-        // 只標狀態、不扣餘額——有設起始餘額者該款項已含在起始餘額、沒設者本就無餘額可扣。
-        // due_date 為空時無法判斷，保守當「未繳」（不自動標）。
-        let autoPaidCount = 0;
-        const isHistoricalBill = (dueDate) => {
-          if (!dueDate) return false;
-          const due = new Date(dueDate + 'T00:00:00');
-          if (isNaN(due.getTime())) return false;
-          const now = new Date(); now.setHours(0,0,0,0);
-          return (now - due) / 86400000 > 60;
-        };
         for (const src of BILL_SOURCES) {
           if (!isEnabled(src.bank, 'bill')) continue;
           const pw = sessionPasswords[src.bank] || '';
-          if (!pw) continue;
+          if (!pw) { missingPw.push(src.bank); continue; }
           const msgs = await gmailSearch('from:'+src.sender+' has:attachment filename:pdf ' + dateFilter);
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
@@ -3448,29 +2715,25 @@
               const bill = src.parse(await extractPdfText(b64ToAB(attData.data), pw));
               if (bill && bill.bill_date) {
                 const key = src.bank + '_' + bill.bill_date.slice(0,7);
-                if (!existingBills.has(key) && !seenKeys[key]) {
-                  seenKeys[key]=true;
-                  const historical = isHistoricalBill(bill.due_date);
-                  if (historical) autoPaidCount++;
-                  billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0, historical?'已繳':'未繳', key]);
-                }
+                if (!existingBills.has(key) && !seenKeys[key]) { seenKeys[key]=true; billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0,'未繳',key]); }
               }
             } catch(e){}
           }
         }
         if (billRows.length) {
-          // 寫入前重新檢查一次（縮小「兩次同步交疊」的競態窗口：中間可能已有別次同步寫入同 key）
-          const freshExisting = await getExistingBillKeys();
-          const toWrite = billRows.filter(r => !freshExisting.has(r[6]));
-          if (toWrite.length) {
-            await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:toWrite})});
-          }
-          billAdded = toWrite.length;
+          await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:billRows})});
+          billAdded = billRows.length;
         }
 
         // ---- 發票 ----
         if (syncOptions['發票'] && syncOptions['發票'].enabled) {
           syncBtn.textContent = '同步發票...';
+          await ensureInvoicesSheet();
+          await ensureCategoriesSheet();
+          await loadCategoryRules();
+          const existingInvNos = await getExistingInvoiceNos();
+          const invRows = [];
+          const seenInv = {};
           const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + invoiceDateFilter);
           const parsedInvoices = [];
           for (const msg of msgs) {
@@ -3479,12 +2742,50 @@
             const attData = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msg.id+'/attachments/'+att.id,{headers:{'Authorization':'Bearer '+accessToken}})).json();
             try {
               const csvText = decodeBase64Url(attData.data);
-              parsedInvoices.push(...parseInvoiceCsv(csvText));
+              parseInvoiceCsv(csvText).forEach(inv => {
+                if (inv.invoice_no && !existingInvNos.has(inv.invoice_no) && !seenInv[inv.invoice_no]) {
+                  seenInv[inv.invoice_no] = true;
+                  parsedInvoices.push(inv);
+                }
+              });
             } catch(e){}
           }
           if (parsedInvoices.length) {
-            // 去重＋套規則＋自動比對＋寫入（與手動上傳 CSV 共用 importParsedInvoices）
-            invAdded = (await importParsedInvoices(parsedInvoices)).added;
+            // 讀所有消費做自動比對（金額+日期完全一致）
+            const allExp = await loadExpenses();
+            const availExp = allExp.filter(e => e.status !== '已匹配'); // 未匹配的消費才能配
+            const expUpdates = []; // 消費要更新：{row, category, detail, invoice_no}
+            for (const inv of parsedInvoices) {
+              const cat = categoryForStore(inv.store) || '';
+              // 找金額+日期一致的未匹配消費
+              const mi = availExp.findIndex(e => Number(e.amount) === Number(inv.amount) && e.date === inv.date);
+              if (mi > -1) {
+                const match = availExp[mi];
+                availExp.splice(mi, 1); // 一筆消費只配一次
+                // 發票：已匹配
+                invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '已匹配', match.gmail_id, inv.detail]);
+                // 消費：套分類（只在待分類時）、明細、發票號碼、已匹配
+                expUpdates.push({ row: match.row, category: (cat && match.category==='待分類') ? cat : match.category, detail: inv.detail, invoice_no: inv.invoice_no });
+              } else {
+                // 沒配到 → 未匹配
+                invRows.push([inv.date, inv.store, inv.amount, inv.invoice_no, inv.carrier, inv.tax_id, cat, '未匹配', '', inv.detail]);
+              }
+            }
+            // 寫發票
+            await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/invoices!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:invRows})});
+            invAdded = invRows.length;
+            // 更新配對到的消費（F分類 G狀態 H明細，加 invoice_no 存哪？消費目前欄位 F=分類 G=狀態 H=發票明細 I=來源 J=排除，發票號碼併進明細或另存）
+            if (expUpdates.length) {
+              const data = [];
+              for (const u of expUpdates) {
+                data.push({ range: 'expenses!F'+u.row, values: [[u.category]] });
+                data.push({ range: 'expenses!G'+u.row, values: [['已匹配']] });
+                data.push({ range: 'expenses!H'+u.row, values: [[u.detail]] });
+              }
+              for (let i=0;i<data.length;i+=100) {
+                await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:data.slice(i,i+100)})});
+              }
+            }
           }
         }
 
@@ -3493,11 +2794,7 @@
         await setLastSync(todayStr);
 
         const sec = ((performance.now()-t0)/1000).toFixed(1);
-        showToast('同步完成！消費+'+expAdded+' 帳戶+'+acctAdded+' 帳單+'+billAdded+' 發票+'+invAdded+'（'+sec+'秒）');
-        if (autoPaidCount > 0) {
-          // 歷史帳單自動標已繳的告知（延遲彈出，不蓋掉主 toast）
-          setTimeout(() => showToast('已自動將 ' + autoPaidCount + ' 筆較早的帳單標為已繳，可到帳單頁的已繳區還原'), 2600);
-        }
+        showToast('同步完成！消費+'+expAdded+' 帳戶+'+acctAdded+' 帳單+'+billAdded+' 發票+'+invAdded+'（'+sec+'秒）' + (missingPw.length ? '。' + missingPw.join('、') + ' 帳單未填 PDF 密碼，已略過' : ''));
         await refreshAllCache();
         await loadAndRender();
       } catch(e) {
@@ -3601,17 +2898,15 @@
       let sheetId;
       if(sheet){sheetId=sheet.properties.sheetId;}
       else{const add=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{addSheet:{properties:{title:'transfers'}}}]})})).json();sheetId=add.replies[0].addSheet.properties.sheetId;}
-      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note','隱藏','pair_id'];
-      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:J1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const HEADER=['日期','銀行','類型','轉出帳號','轉入帳號','金額','gmail_message_id','note'];
+      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:H1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
       const firstRow=(fr.values&&fr.values[0])||[];
       if(!(firstRow[0]==='日期'&&firstRow[6]==='gmail_message_id')){
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{insertDimension:{range:{sheetId,dimension:'ROWS',startIndex:0,endIndex:1}}}]})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:J1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
-      } else {
-        // 舊分頁補標題（note=H、隱藏=I、pair_id=J）
-        if (firstRow[7] !== 'note') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['note']]})});
-        if (firstRow[8] !== '隱藏') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!I1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['隱藏']]})});
-        if (firstRow[9] !== 'pair_id') await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!J1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['pair_id']]})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[[...HEADER]]})});
+      } else if (firstRow[7] !== 'note') {
+        // 舊分頁補 note 標題
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['note']]})});
       }
     }
     async function getExistingTransferIds() {
@@ -3678,139 +2973,13 @@
       let billsSheetId;
       if(billsSheet){billsSheetId=billsSheet.properties.sheetId;}
       else{const add=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{addSheet:{properties:{title:'bills'}}}]})})).json();billsSheetId=add.replies[0].addSheet.properties.sheetId;}
-      const HEADER=['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key','刪除'];
-      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:H1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
+      const HEADER=['銀行','結帳日','繳款截止日','應繳總額','最低應繳','狀態','key'];
+      const fr=await(await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:G1',{headers:{'Authorization':'Bearer '+accessToken}})).json();
       const firstRow=(fr.values&&fr.values[0])||[];
       if(!(firstRow[0]==='銀行'&&firstRow[6]==='key')){
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+':batchUpdate',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({requests:[{insertDimension:{range:{sheetId:billsSheetId,dimension:'ROWS',startIndex:0,endIndex:1}}}]})});
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[HEADER]})});
-      } else if (firstRow[7] !== '刪除') {
-        // 舊分頁補「刪除」標題
-        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!H1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[['刪除']]})});
+        await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:G1?valueInputOption=RAW',{method:'PUT',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[HEADER]})});
       }
-    }
-
-    // ===== 首次登入引導 =====
-    // 首次引導選的需求，資產設定完成時據此自動配同步選項
-    let onboardingNeeds = null;
-    function showOnboarding() {
-      const needs = { bill: false, expense: false, invoice: false, asset: false };
-      let step = 'intro'; // intro（說明頁）→ needs（選需求）
-      const overlay = document.createElement('div');
-      overlay.className = 'qa-overlay';
-      document.body.appendChild(overlay);
-
-      // 說明頁：先讓使用者知道「這是什麼、能得到什麼」，再進四選項（四點對應後面四選項，看完就懂怎麼選）
-      function renderIntro() {
-        const feat = (icon, title, desc) =>
-          '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:14px;">'
-          + '<div style="font-size:22px;line-height:1.3;flex-shrink:0;">' + icon + '</div>'
-          + '<div><div style="font-size:14px;font-weight:600;">' + title + '</div>'
-          + '<div style="font-size:12px;color:#8a9a97;margin-top:2px;line-height:1.5;">' + desc + '</div></div></div>';
-        overlay.innerHTML = '<div class="qa-panel">'
-          + '<div style="text-align:center;font-size:40px;margin-bottom:6px;">👋</div>'
-          + '<div style="text-align:center;font-size:21px;font-weight:700;margin-bottom:6px;">歡迎使用 YouOwn</div>'
-          + '<div style="text-align:center;font-size:13px;color:#7a8a87;margin-bottom:20px;line-height:1.6;">把你的帳戶、帳單、消費一次看清。<br>資料只存在你自己的 Google，我們看不到，也不用你的銀行帳密。</div>'
-          + '<div style="font-size:13px;font-weight:600;color:#8a9a97;margin-bottom:12px;">YouOwn 可以幫你：</div>'
-          + feat('💳', '追蹤信用卡帳單', '帳單直接從 Email 抓取，繳款期限不再漏掉')
-          + feat('🧾', '自動記錄消費', '信用卡消費通知進來自動記帳，也能手動補記')
-          + feat('📄', '發票對上消費', '電子發票明細自動比對消費，看清每筆花在哪')
-          + feat('🏦', '掌握資產餘額', '各帳戶餘額一起看，轉帳、扣款自動更新')
-          + '<div style="font-size:11px;color:#bbc;margin:6px 0 16px;line-height:1.6;">＊自動同步需要你的銀行有寄 Email 通知；沒有通知的也都能手動記帳。</div>'
-          + '<div class="qa-btns"><button id="introSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
-          + '<button id="introNext" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">開始設定</button></div>'
-          + '</div>';
-        document.getElementById('introSkip').onclick = () => overlay.remove();
-        document.getElementById('introNext').onclick = () => { step = 'needs'; renderOb(); };
-      }
-
-      function renderOb() {
-        const opt = (key, title, sub) =>
-          '<button class="ob-opt" data-key="' + key + '" style="display:block;width:100%;text-align:left;padding:14px;border-radius:12px;margin-bottom:10px;cursor:pointer;'
-          + 'border:2px solid ' + (needs[key] ? '#00897b' : '#dde8e5') + ';background:' + (needs[key] ? '#e8f5f3' : '#fff') + ';">'
-          + '<div style="font-size:15px;font-weight:600;">' + (needs[key] ? '✓ ' : '') + title + '</div>'
-          + '<div style="font-size:12px;color:#8a9a97;margin-top:3px;">' + sub + '</div></button>';
-        overlay.innerHTML = '<div class="qa-panel">'
-          + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
-          + '<button id="obBack" style="border:none;background:none;color:#8a9a97;font-size:20px;cursor:pointer;padding:0;line-height:1;">‹</button>'
-          + '<div style="font-size:18px;font-weight:700;">你想先用哪些功能？</div></div>'
-          + '<div style="font-size:12px;color:#8a9a97;margin-bottom:16px;">可複選，之後都能在設定裡調整。</div>'
-          + opt('bill', '信用卡帳單', '帳單直接從 Email 抓取，追蹤繳款')
-          + opt('expense', '每日消費', '信用卡消費通知自動記帳')
-          + opt('invoice', '發票匹配消費', '次月發票明細自動比對上月消費')
-          + opt('asset', '資產管理', '手動設定餘額，轉帳與卡費扣繳自動扣除、可隨時調整')
-          + '<div class="qa-btns" style="margin-top:8px;"><button id="obSkip" style="flex:1;border:1px solid #ddd;background:none;">先逛逛</button>'
-          + '<button id="obStart" style="flex:2;border:none;background:#00897b;color:#fff;font-weight:600;">下一步</button></div>'
-          + '</div>';
-        document.getElementById('obBack').onclick = () => { step = 'intro'; renderIntro(); };
-        overlay.querySelectorAll('.ob-opt').forEach(btn => {
-          btn.onclick = () => { needs[btn.dataset.key] = !needs[btn.dataset.key]; renderOb(); };
-        });
-        document.getElementById('obSkip').onclick = () => overlay.remove();
-        document.getElementById('obStart').onclick = async () => {
-          if (!needs.bill && !needs.expense && !needs.invoice && !needs.asset) { showToast('至少選一個'); return; }
-          onboardingNeeds = { ...needs };
-          // 依需求開啟頁籤（總覽固定；帳戶只在選了資產管理時開）
-          const tabs = new Set(['cashflow']);
-          if (needs.bill) tabs.add('bills');
-          if (needs.expense) tabs.add('expenses');
-          if (needs.invoice) { tabs.add('invoices'); tabs.add('expenses'); } // 匹配依賴消費
-          if (needs.asset) tabs.add('accounts');
-          enabledTabs = tabs;
-          try { await saveTabSettings(); } catch(e) {}
-          renderTabs();
-          overlay.remove();
-          if (needs.asset) {
-            // 有資產需求 → 先設定資產（完成時自動配同步選項）
-            openSettings();
-            openMyBanksSetting();
-          } else {
-            // 沒有資產需求 → 跳過資產設定，直接配同步選項、帶去填密碼
-            try {
-              syncOptions = {};
-              for (const cap of BANKS_SUPPORT) {
-                const o = {};
-                if (onboardingNeeds.expense && cap.expense) o.expense = true;
-                if (onboardingNeeds.bill && cap.bill) o.bill = true;
-                if (Object.keys(o).length) syncOptions[cap.name] = o;
-              }
-              if (onboardingNeeds.invoice) syncOptions['發票'] = { enabled: true };
-              await saveSyncOptions();
-              myBanks = []; await saveMyBanks(); // 標記引導完成（避免下次又跳引導）
-            } catch(e) {}
-            onboardingNeeds = null;
-            showToast('已依你的選擇設定同步項目');
-            openSettings();
-            openBankSetting(); // 帶去同步設定確認 + 填 PDF 密碼
-          }
-        };
-      }
-      renderIntro();
-    }
-
-    // ===== 廣告版位（banner.json 控制，改 JSON 即換廣告） =====
-    async function loadBanner() {
-      try {
-        const res = await fetch('banner.json?t=' + Date.now());
-        if (!res.ok) return;
-        const b = await res.json();
-        if (!b.enabled || !b.image) return;
-        const banner = document.getElementById('adBanner');
-        const img = document.getElementById('adBannerImg');
-        img.src = b.image;
-        img.alt = b.alt || '';
-        img.onclick = () => {
-          if (!b.link) return;
-          if (b.link.startsWith('mailto:')) window.location.href = b.link;
-          else window.open(b.link, '_blank', 'noopener,noreferrer');
-        };
-        bannerActive = true;
-        document.querySelector('.app').classList.add('has-banner');
-        // 只在主畫面顯示；若背景載入完成時人已在設定頁，先不顯示（closeSettings 時會恢復）
-        if (document.getElementById('mainView').style.display !== 'none') {
-          banner.style.display = 'block';
-        }
-      } catch(e) {} // 抓不到就不顯示
     }
 
     // ===== 快速記帳 =====
@@ -3915,12 +3084,10 @@
       } else if (s.type === '互轉') {
         await ensureTransfersSheet();
         const mutualNote = '互轉 ' + s.bank + '→' + s.toBank + (s.note?' '+s.note:'');
-        const pairId = 'pair_' + Date.now();
-        // 兩筆共用 pairId（J 欄），刪除時靠它可靠成對處理。G 欄的 _out/_in 保留為 fallback
         await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
           {method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:[
-            [s.date,s.bank,'轉出','','',amount,manualId+'_out',mutualNote,'',pairId],
-            [s.date,s.toBank,'轉入','','',amount,manualId+'_in',mutualNote,'',pairId]
+            [s.date,s.bank,'轉出','','',amount,manualId+'_out',mutualNote],
+            [s.date,s.toBank,'轉入','','',amount,manualId+'_in',mutualNote]
           ]})});
       } else {
         await ensureTransfersSheet();
