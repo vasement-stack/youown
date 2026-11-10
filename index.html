@@ -2465,6 +2465,18 @@
       if(html)return html.replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\s+/g,' ').trim();
       return '';
     }
+    function extractAllText(payload) {
+      const out=[];
+      (function walk(p){
+        if(p.body&&p.body.data&&(p.mimeType==='text/plain'||p.mimeType==='text/html')){
+          let t=decodeBase64Url(p.body.data);
+          if(p.mimeType==='text/html') t=t.replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+          out.push(t.replace(/\s+/g,' ').trim());
+        }
+        if(p.parts) p.parts.forEach(walk);
+      })(payload);
+      return out.join(' ');
+    }
     function findPdfAttachment(payload) {
       if(payload.filename&&payload.filename.toLowerCase().endsWith('.pdf')&&payload.body&&payload.body.attachmentId)return payload.body.attachmentId;
       if(payload.parts){for(const p of payload.parts){const r=findPdfAttachment(p);if(r)return r;}} return null;
@@ -2521,7 +2533,7 @@
     // ===== 帳單 parser =====
     // 中信：信件本文就有數字（不需開 PDF）。順序：民國年、月、繳款截止日、應繳總額、最低應繳
     function parseCtbcBillBody(text, msgDate){
-      const m=text.match(/(\d{3})\s+(\d{1,2})\s+(\d{3})\/(\d{2})\/(\d{2})\s+(-?[\d,]+)\s+(-?[\d,]+)(?![\d,])/);
+      const m=text.match(/(\d{3})\D{1,40}?(\d{1,2})\D{1,40}?(\d{3})\/(\d{2})\/(\d{2})\D{1,40}?(\d[\d,]*)\D{1,40}?(\d[\d,]*)/);
       if(!m) return null;
       const r={};
       const y=parseInt(m[1],10)+1911, mo=String(parseInt(m[2],10)).padStart(2,'0');
@@ -2652,6 +2664,7 @@
       const t0 = performance.now();
       let expAdded = 0, billAdded = 0, acctAdded = 0, invAdded = 0;
       const missingPw = [];
+      const billWarn = [];
 
       try {
         const lastSync = await getLastSync();
@@ -2736,14 +2749,18 @@
           if (src.mode === 'body') {
             // 金額在信件本文，不需 PDF 密碼
             const bmsgs = await gmailSearch('from:'+src.sender+' '+dateFilter);
+            let parsedN = 0;
             for (const msg of bmsgs) {
               const md = await fetchMsg(msg.id); if(!md) continue;
-              const bill = src.parse(extractBody(md.payload), new Date(parseInt(md.internalDate)));
+              const bill = src.parse(extractAllText(md.payload), new Date(parseInt(md.internalDate)));
+              if (bill) parsedN++;
               if (bill && bill.bill_date) {
                 const key = src.bank + '_' + bill.bill_date.slice(0,7);
                 if (!existingBills.has(key) && !seenKeys[key]) { seenKeys[key]=true; billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0,'未繳',key]); }
               }
             }
+            if (!bmsgs.length) billWarn.push(src.bank + '帳單：沒搜到信');
+            else if (parsedN < bmsgs.length) billWarn.push(src.bank + '帳單：找到 ' + bmsgs.length + ' 封，只解析 ' + parsedN + ' 封');
             continue;
           }
           const pw = sessionPasswords[src.bank] || '';
@@ -2836,7 +2853,7 @@
         await setLastSync(todayStr);
 
         const sec = ((performance.now()-t0)/1000).toFixed(1);
-        showToast('同步完成！消費+'+expAdded+' 帳戶+'+acctAdded+' 帳單+'+billAdded+' 發票+'+invAdded+'（'+sec+'秒）' + (missingPw.length ? '。' + missingPw.join('、') + ' 帳單未填 PDF 密碼，已略過' : ''));
+        showToast('同步完成！消費+'+expAdded+' 帳戶+'+acctAdded+' 帳單+'+billAdded+' 發票+'+invAdded+'（'+sec+'秒）' + (missingPw.length ? '。' + missingPw.join('、') + ' 帳單未填 PDF 密碼，已略過' : '') + (billWarn.length ? '。' + billWarn.join('；') : ''));
         await refreshAllCache();
         await loadAndRender();
       } catch(e) {
