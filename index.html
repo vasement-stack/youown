@@ -305,7 +305,7 @@
     ];
 
     // 銀行顏色
-    const BANK_COLORS = { '匯豐':'#db0011','永豐':'#00a1a7','新光':'#e97300','華南':'#00843d','台新':'#7b1fa2','中信':'#0a2b5e' };
+    const BANK_COLORS = { '匯豐':'#db0011','永豐':'#00a1a7','新光':'#e97300','華南':'#00843d','台新':'#7b1fa2','中信':'#0a2b5e','臺灣銀行':'#2e7d32' };
     // 自訂銀行顏色（用戶可在資產設定調整，優先於預設色）
     let bankColors = {};
     function getBankColor(bank) { return bankColors[bank] || BANK_COLORS[bank] || '#8899aa'; }
@@ -386,6 +386,7 @@
       { name:'新光', account:false, expense:'純文字', bill:true, needPw:true },
       { name:'華南', account:false, expense:'PDF', bill:true, needPw:true },
       { name:'台新', account:true, expense:null, bill:true, needPw:true },
+      { name:'臺灣銀行', account:false, expense:null, bill:true, needPw:true },
       { name:'中信', account:true, expense:'純文字', bill:true, needPw:false },
       { name:'王道', account:true, expense:null, bill:false, needPw:false },
       { name:'上海', account:true, expense:null, bill:false, needPw:false },
@@ -2542,6 +2543,17 @@
     }
 
     // ===== 帳單 parser =====
+    // 臺灣銀行：用文字尾端固定句型抓金額；日期取所有「民國年/月/日」中最早=結帳日、最晚=繳款截止日（不依賴欄位順序）
+    function parseBotBill(text){
+      const tot=text.match(/全部應繳金額\s*[:：]?\s*NT\$?\s*(-?[\d,]+)/);
+      const mn=text.match(/最低應繳金額\s*[:：]\s*NT\$?\s*(-?[\d,]+)/);
+      if(!tot) return null;
+      const total=parseInt(tot[1].replace(/,/g,''),10);
+      if(!total || total<=0) return { skip:true }; // 本期無須繳款
+      const ds=[...text.matchAll(/\b(1\d{2})\/(\d{2})\/(\d{2})\b/g)].map(m=>(parseInt(m[1],10)+1911)+'-'+m[2]+'-'+m[3]).sort();
+      if(!ds.length) return null;
+      return { bill_date:ds[0], due_date:ds[ds.length-1], total_amount:total, min_payment:mn?parseInt(mn[1].replace(/,/g,''),10):total };
+    }
     // 中信：信件本文就有數字（不需開 PDF）。順序：民國年、月、繳款截止日、應繳總額、最低應繳
     function parseCtbcBillBody(text, msgDate){
       if(/請不用繳款/.test(text)) return { skip:true }; // 本期無須繳款，視為正常解析但不記錄
@@ -2661,6 +2673,7 @@
       { bank:'新光', sender:'service@ebill.skbank.com.tw', parse:parseSkbankBill },
       { bank:'華南', sender:'service@ebmail.hncb.com.tw', parse:parseHncbBill },
       { bank:'台新', sender:'webmaster@bhurecv.taishinbank.com.tw', parse:parseTaishinBill },
+      { bank:'臺灣銀行', sender:'cards@mail.bot.com.tw', extra:'subject:(信用卡 電子帳單)', parse:parseBotBill },
       { bank:'中信', sender:'ebill@estats.ctbcbank.com', extra:'subject:信用卡電子帳單', mode:'body', parse:parseCtbcBillBody },
     ];
 
@@ -2781,19 +2794,22 @@
           }
           const pw = sessionPasswords[src.bank] || '';
           if (!pw) { missingPw.push(src.bank); continue; }
-          const msgs = await gmailSearch('from:'+src.sender+' has:attachment filename:pdf ' + dateFilter);
+          const msgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' has:attachment filename:pdf ' + dateFilter);
+          let pdfFail = 0;
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
             const attId = findPdfAttachment(md.payload); if(!attId) continue;
             const attData = await (await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+msg.id+'/attachments/'+attId,{headers:{'Authorization':'Bearer '+accessToken}})).json();
             try {
               const bill = src.parse(await extractPdfText(b64ToAB(attData.data), pw));
+              if (!bill) pdfFail++;
               if (bill && bill.bill_date) {
                 const key = src.bank + '_' + bill.bill_date.slice(0,7);
                 if (!existingBills.has(key) && !seenKeys[key]) { seenKeys[key]=true; billRows.push([src.bank,bill.bill_date,bill.due_date||'',bill.total_amount,bill.min_payment||0,'未繳',key]); }
               }
-            } catch(e){}
+            } catch(e){ pdfFail++; }
           }
+          if (pdfFail) billWarn.push(src.bank + '帳單：' + pdfFail + ' 封讀取失敗（密碼錯誤或格式不同）');
         }
         if (billRows.length) {
           await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/bills!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:billRows})});
