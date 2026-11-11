@@ -673,17 +673,17 @@
 
     // ===== 使用說明：內容放在用戶自己的 YouOwn 帳本「說明」分頁，App 內只放指引 =====
     // 改文案時：修改下面的 HELP_ITEMS，並把 HELP_VERSION 加 1，用戶下次登入會自動更新帳本裡的說明分頁
-    const HELP_VERSION = 'help_v1';
+    const HELP_VERSION = 'help_v2';
     const HELP_SHEET = '說明';
     const HELP_ITEMS = [
-      ['同步是怎麼運作的？', '第一次同步時，你選一個「起始日期」，只會抓這個日期之後的信。\\n之後每次同步，只抓「上次同步日」之後的新信。\\n已經記錄過的信不會重複記。'],
-      ['新增一家銀行／信用卡，想抓之前的帳單怎麼辦？', '「上次同步日」是所有銀行共用的，不是每家分開記。\\n\\n例如：你昨天同步過，今天才新增某家銀行，直接按同步只會抓「昨天之後」的信，抓不到上個月的帳單。\\n\\n做法：App 設定 → 同步設定 → 按「重新設定同步起始日期」→ 回主畫面按同步 → 選一個比目標帳單更早的日期。\\n已有的資料不會被刪除，也不會重複記錄。'],
-      ['為什麼我的帳單沒有出現？', '依序檢查：\\n1. 同步設定裡該銀行的「帳單」有沒有勾選。\\n2. 需要 PDF 密碼的銀行有沒有填（中信帳單不需要）。\\n3. 起始日期有沒有涵蓋那期帳單。\\n4. 銀行的通知信箱是不是這個 Gmail（手動轉寄的信無法辨識）。\\n5. 本期應繳 0 元的月份不會產生帳單。\\n6. 同步完成的提示若寫「讀取失敗」，通常是密碼錯誤。'],
-      ['我在這個試算表刪掉資料，為什麼又出現了？', '系統靠「這封信處理過了沒」避免重複。把那一列刪掉後，系統就不知道處理過，下次同步若在日期範圍內，又會重新抓回來。\\n\\n消費可以在 App 裡點進去，把「列入收支統計」關掉，不計入但保留紀錄。其他資料的隱藏功能開發中。'],
-      ['發票怎麼匹配消費？', '發票與信用卡消費的「金額與日期都一致」時自動匹配，並補上店名與品項、套用分類規則。\\n沒配到的可以在發票頁手動匹配，或按「重新匹配」再補配一輪。'],
-      ['PDF 密碼會存在哪裡？', '預設只暫存在記憶體，關閉頁面就清除。\\n若開啟「記住 PDF 密碼」，才會存在這台裝置，登出時清除。\\n密碼不會上傳到任何伺服器。共用裝置建議不要開啟。'],
+      ['同步是怎麼運作的？', '第一次同步時，你選一個「起始日期」，只會抓這個日期之後的信。\n之後每次同步，每個項目（例如「中信消費」「臺灣銀行帳單」「電子發票」）各自只抓「它上次同步日」之後的新信。\n已經記錄過的信不會重複記。\n\n如果某個項目這次被略過（例如帳單還沒填 PDF 密碼），它的同步日不會往前走，填好後下次同步會自動補回。'],
+      ['新增一家銀行／信用卡，想抓之前的帳單怎麼辦？', '在同步設定勾選新的項目後，下次按同步，App 會跳出視窗問你「要抓多久以前的資料」，只對新增的項目補抓，其他已同步的項目不受影響。\n\n想抓上個月的帳單，就選一個比那期帳單更早的日期。\n已有的資料不會被刪除，也不會重複記錄。\n\n注意：補抓回來的轉帳／提領紀錄不會改動帳戶餘額（餘額是你設定的現況），需要的話請到帳戶頁校正。'],
+      ['為什麼我的帳單沒有出現？', '依序檢查：\n1. 同步設定裡該銀行的「帳單」有沒有勾選。\n2. 需要 PDF 密碼的銀行有沒有填（中信帳單不需要）。\n3. 起始日期有沒有涵蓋那期帳單。\n4. 銀行的通知信箱是不是這個 Gmail（手動轉寄的信無法辨識）。\n5. 本期應繳 0 元的月份不會產生帳單。\n6. 同步完成的提示若寫「讀取失敗」，通常是密碼錯誤。'],
+      ['我在這個試算表刪掉資料，為什麼又出現了？', '系統靠「這封信處理過了沒」避免重複。把那一列刪掉後，系統就不知道處理過，下次同步若在日期範圍內，又會重新抓回來。\n\n消費可以在 App 裡點進去，把「列入收支統計」關掉，不計入但保留紀錄。其他資料的隱藏功能開發中。'],
+      ['發票怎麼匹配消費？', '發票與信用卡消費的「金額與日期都一致」時自動匹配，並補上店名與品項、套用分類規則。\n沒配到的可以在發票頁手動匹配，或按「重新匹配」再補配一輪。'],
+      ['PDF 密碼會存在哪裡？', '預設只暫存在記憶體，關閉頁面就清除。\n若開啟「記住 PDF 密碼」，才會存在這台裝置，登出時清除。\n密碼不會上傳到任何伺服器。共用裝置建議不要開啟。'],
       ['為什麼登入一陣子後會失效？', '為了不保留你的登入憑證，登入約 1 小時後會過期。重新整理頁面再登入一次即可，資料不會遺失。'],
-      ['這個試算表的各分頁是做什麼的？', 'expenses：消費紀錄\\nbills：信用卡帳單\\ntransfers：轉帳／提領／卡費扣繳\\ninvoices：電子發票\\naccounts：各帳戶餘額\\ncategories：分類規則（關鍵字 → 分類）\\n_config：App 的設定（同步項目、偏好等）\\n說明：就是這一頁\\n\\n建議用 App 操作，直接改試算表請小心，改錯欄位可能造成顯示異常。'],
+      ['這個試算表的各分頁是做什麼的？', 'expenses：消費紀錄\nbills：信用卡帳單\ntransfers：轉帳／提領／卡費扣繳\ninvoices：電子發票\naccounts：各帳戶餘額\ncategories：分類規則（關鍵字 → 分類）\n_config：App 的設定（同步項目、偏好等）\n說明：就是這一頁\n\n建議用 App 操作，直接改試算表請小心，改錯欄位可能造成顯示異常。'],
     ];
     let helpGid = null;
     async function ensureHelpSheet() {
@@ -2759,6 +2759,42 @@
       return syncOptions[bank] && syncOptions[bank][type];
     }
 
+    // ===== 各同步來源各自記「同步到哪天」（新增來源可補抓舊資料；被略過的來源下次會補回）=====
+    function keyLabel(k) {
+      if (k === '發票') return '電子發票';
+      const [bank, type] = k.split(':');
+      return bank + ({ expense:'消費', bill:'帳單', account:'提領轉帳' }[type] || '');
+    }
+    function currentEnabledKeys() {
+      const k = [];
+      EXPENSE_SOURCES.forEach(x => { if (isEnabled(x.bank, 'expense')) k.push(x.bank + ':expense'); });
+      ACCOUNT_SOURCES.forEach(x => { if (isEnabled(x.bank, 'account')) k.push(x.bank + ':account'); });
+      if (isEnabled('台新', 'account')) k.push('台新:account');
+      BILL_SOURCES.forEach(x => { if (isEnabled(x.bank, 'bill')) k.push(x.bank + ':bill'); });
+      if (syncOptions['發票'] && syncOptions['發票'].enabled) k.push('發票');
+      return [...new Set(k)];
+    }
+    // 這個來源現在能不能同步（需要 PDF 密碼卻沒填的，這次會被略過）
+    function keyReady(k) {
+      const [bank, type] = k.split(':');
+      if (type === 'expense') { const x = EXPENSE_SOURCES.find(e => e.bank === bank); return !(x && x.type === 'pdf' && !sessionPasswords[bank]); }
+      if (type === 'bill') { const x = BILL_SOURCES.find(e => e.bank === bank); return !(x && x.mode !== 'body' && !sessionPasswords[bank]); }
+      return true;
+    }
+    function toAfter(dateStr) { const [y,m,d] = dateStr.split('-'); return 'after:' + y + '/' + parseInt(m) + '/' + parseInt(d); }
+    async function getSourceSync() {
+      try {
+        const res = await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A1:B20', { headers: { 'Authorization': 'Bearer ' + accessToken } });
+        const d = await res.json();
+        const row = (d.values || []).find(r => r[0] === 'source_sync');
+        return (row && row[1]) ? JSON.parse(row[1]) : null;
+      } catch(e) { return null; }
+    }
+    async function saveSourceSync(map) {
+      await fetch('https://sheets.googleapis.com/v4/spreadsheets/' + spreadsheetId + '/values/_config!A9:B9?valueInputOption=RAW',
+        { method:'PUT', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'}, body: JSON.stringify({ values: [['source_sync', JSON.stringify(map)]] }) });
+    }
+
     async function doSync() {
       const syncBtn = document.getElementById('syncBtn');
       syncBtn.disabled = true;
@@ -2770,17 +2806,29 @@
 
       try {
         const lastSync = await getLastSync();
-        let dateFilter, invoiceDateFilter;
-        if (lastSync) {
-          dateFilter = 'after:' + lastSync;
-          invoiceDateFilter = 'after:' + lastSync;
+        const enabledKeys = currentEnabledKeys();
+        let srcMap = await getSourceSync(); // { 來源key: 'YYYY/MM/DD' }，沒有 = 舊版用戶或首次同步
+        let backfillFilter = null;
+        const noBalIds = new Set(); // 補抓的轉帳不動餘額（餘額是用戶設定的現況）
+        if (!lastSync) {
+          // 首次同步：全部來源用用戶自選的起始日期
+          srcMap = {};
+          backfillFilter = toAfter(await getSyncStartDate());
         } else {
-          // 首次同步：用用戶自選的起始日期（若沒選過則先跳選擇框，見 doSync 呼叫處）
-          const startDate = await getSyncStartDate(); // 格式 YYYY-MM-DD
-          const [y,m,d] = startDate.split('-');
-          dateFilter = 'after:' + y + '/' + parseInt(m) + '/' + parseInt(d);
-          invoiceDateFilter = dateFilter; // 發票也從同一天開始找（雙月信件會自然涵蓋前一期）
+          if (srcMap === null) { srcMap = {}; enabledKeys.forEach(k => { srcMap[k] = lastSync; }); } // 舊版用戶遷移：視為都同步到上次同步日
+          const newKeys = enabledKeys.filter(k => !srcMap[k] && keyReady(k));
+          if (newKeys.length) {
+            const chosen = await askSyncStartDate({
+              title: '新增的同步項目：要抓多久以前的資料？',
+              note: '第一次同步：' + newKeys.map(k => esc(keyLabel(k))).join('、') + '。<br>選擇後只會抓這個日期<b>之後</b>的資料，其他已同步的項目不受影響。',
+              allowNone: true
+            });
+            backfillFilter = toAfter(chosen);
+          }
         }
+        const filterFor = (key) => srcMap[key] ? ('after:' + srcMap[key]) : (backfillFilter || (lastSync ? 'after:' + lastSync : ''));
+        const isBackfillKey = (key) => !!lastSync && !srcMap[key];
+        const doneKeys = [];
 
         // ---- 消費 ----
         syncBtn.textContent = '同步消費...';
@@ -2790,7 +2838,8 @@
           if (!isEnabled(src.bank, 'expense')) continue;
           const pw = sessionPasswords[src.bank] || '';
           if (src.type === 'pdf' && !pw) continue;
-          const msgs = await gmailSearch(src.query + ' ' + dateFilter);
+          doneKeys.push(src.bank + ':expense');
+          const msgs = await gmailSearch(src.query + ' ' + filterFor(src.bank + ':expense'));
           const BATCH = src.type==='pdf' ? 5 : 10;
           for (let i=0;i<msgs.length;i+=BATCH) {
             const batch = msgs.slice(i,i+BATCH);
@@ -2818,26 +2867,30 @@
         const trRows = [];
         for (const src of ACCOUNT_SOURCES) {
           if (!isEnabled(src.bank, 'account')) continue;
-          const msgs = await gmailSearch(src.query + ' ' + dateFilter);
+          doneKeys.push(src.bank + ':account');
+          const isBackfill = isBackfillKey(src.bank + ':account');
+          const msgs = await gmailSearch(src.query + ' ' + filterFor(src.bank + ':account'));
           for (let i=0;i<msgs.length;i+=10) {
             const batch = msgs.slice(i,i+10);
             await Promise.all(batch.map(async (msg) => {
               if (existingTrIds.has(msg.id)) return;
               const md = await fetchMsg(msg.id); if(!md) return;
               const p = src.parse(extractBody(md.payload));
-              if (p) trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]);
+              if (p) { trRows.push([p.date,p.bank,p.type,p.from_account,p.to_account,p.amount,msg.id]); if (isBackfill) noBalIds.add(msg.id); }
             }));
           }
         }
         // 台新無卡提款（設定通知+結果通知配對，只有配對成功才記錄）
         if (isEnabled('台新', 'account')) {
-          const taishinRows = await syncTaishinAtmWithdrawals(dateFilter, existingTrIds);
+          doneKeys.push('台新:account');
+          const taishinRows = await syncTaishinAtmWithdrawals(filterFor('台新:account'), existingTrIds);
+          if (isBackfillKey('台新:account')) taishinRows.forEach(r => noBalIds.add(r[6]));
           trRows.push(...taishinRows);
         }
         if (trRows.length) {
           await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values/transfers!A1:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({values:trRows})});
           acctAdded = trRows.length;
-          await updateAccountBalances(trRows);
+          await updateAccountBalances(trRows.filter(r => !noBalIds.has(r[6])));
         }
 
         // ---- 帳單 ----
@@ -2850,7 +2903,8 @@
           if (!isEnabled(src.bank, 'bill')) continue;
           if (src.mode === 'body') {
             // 金額在信件本文，不需 PDF 密碼
-            const bmsgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' '+dateFilter);
+            doneKeys.push(src.bank + ':bill');
+            const bmsgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' '+filterFor(src.bank + ':bill'));
             let parsedN = 0, savedN = 0; const dbgLines = [];
             for (const msg of bmsgs) {
               const md = await fetchMsg(msg.id); if(!md) continue;
@@ -2871,7 +2925,8 @@
           }
           const pw = sessionPasswords[src.bank] || '';
           if (!pw) { missingPw.push(src.bank); continue; }
-          const msgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' has:attachment filename:pdf ' + dateFilter);
+          doneKeys.push(src.bank + ':bill');
+          const msgs = await gmailSearch('from:'+src.sender+(src.extra?' '+src.extra:'')+' has:attachment filename:pdf ' + filterFor(src.bank + ':bill'));
           let pdfFail = 0;
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
@@ -2902,7 +2957,8 @@
           const existingInvNos = await getExistingInvoiceNos();
           const invRows = [];
           const seenInv = {};
-          const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + invoiceDateFilter);
+          doneKeys.push('發票');
+          const msgs = await gmailSearch('from:einvoice@einvoice.nat.gov.tw ' + filterFor('發票'));
           const parsedInvoices = [];
           for (const msg of msgs) {
             const md = await fetchMsg(msg.id); if(!md) continue;
@@ -2959,6 +3015,9 @@
 
         const now = new Date();
         const todayStr = now.getFullYear()+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+String(now.getDate()).padStart(2,'0');
+        const nextMap = {};
+        enabledKeys.forEach(k => { if (doneKeys.includes(k)) nextMap[k] = todayStr; else if (srcMap[k]) nextMap[k] = srcMap[k]; });
+        await saveSourceSync(nextMap);
         await setLastSync(todayStr);
 
         const sec = ((performance.now()-t0)/1000).toFixed(1);
@@ -2998,7 +3057,10 @@
       return chosen;
     }
     // 首次同步前跳出的起始日期選擇框
-    function askSyncStartDate() {
+    function askSyncStartDate(o) {
+      o = o || {};
+      const dlgTitle = o.title || '第一次同步：要抓多久以前的資料？';
+      const dlgNote = o.note || '選擇後只會同步這個日期<b>之後</b>的資料，之前的資料不會自動補上。之後可到「設定」重新選擇範圍。';
       return new Promise((resolve) => {
         const today = new Date();
         const opts = [
@@ -3006,16 +3068,18 @@
           { label: '最近 3 個月', days: 90 },
           { label: '最近半年', days: 182 },
           { label: '今年 1/1 起', special: 'year' },
+          ...(o.allowNone ? [{ label: '不補抓，只抓之後新的', special: 'none' }] : []),
         ];
         const overlay = document.createElement('div');
         overlay.className = 'qa-overlay';
         function calcDate(opt) {
           if (opt.special === 'year') return today.getFullYear() + '-01-01';
+          if (opt.special === 'none') return today.toISOString().slice(0,10);
           const d = new Date(today); d.setDate(d.getDate() - opt.days);
           return d.toISOString().slice(0,10);
         }
-        let html = '<div class="qa-panel"><div class="qa-title">第一次同步：要抓多久以前的資料？</div>'
-          + '<div style="font-size:12px;color:#e67e00;background:#fff8e8;border-radius:8px;padding:10px 12px;margin-bottom:14px;">選擇後只會同步這個日期<b>之後</b>的資料，之前的資料不會自動補上。之後可到「設定」重新選擇範圍。</div>'
+        let html = '<div class="qa-panel"><div class="qa-title">' + esc(dlgTitle) + '</div>'
+          + '<div style="font-size:12px;color:#e67e00;background:#fff8e8;border-radius:8px;padding:10px 12px;margin-bottom:14px;">' + dlgNote + '</div>'
           + '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">'
           + opts.map((o,i) => '<button class="sync-start-opt" data-idx="' + i + '" style="padding:12px;border-radius:10px;border:1px solid #dde8e5;background:#fff;font-size:14px;cursor:pointer;text-align:left;">' + o.label + '</button>').join('')
           + '</div>'
@@ -3049,7 +3113,8 @@
       await fetch('https://sheets.googleapis.com/v4/spreadsheets/'+spreadsheetId+'/values:batchUpdate',
         {method:'POST',headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},body:JSON.stringify({valueInputOption:'RAW',data:[
           {range:'_config!A1:B1',values:[['last_sync','']]},
-          {range:'_config!A7:B7',values:[['sync_start_date','']]}
+          {range:'_config!A7:B7',values:[['sync_start_date','']]},
+          {range:'_config!A9:B9',values:[['source_sync','']]}
         ]})});
     }
     async function getExistingExpIds() {
